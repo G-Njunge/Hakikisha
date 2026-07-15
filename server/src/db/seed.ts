@@ -1,0 +1,122 @@
+import dotenv from "dotenv";
+import { Pool } from "pg";
+
+dotenv.config();
+
+type RegulatoryBody = "NAFDAC" | "KEBS" | "SAHPRA";
+type ApprovalStatus = "approved" | "pending" | "rejected" | "expired";
+
+interface MedicineSeed {
+  name: string;
+  genericName: string | null;
+  manufacturer: string;
+  dosageForm: string;
+  strength: string | null;
+  regulatoryBody: RegulatoryBody;
+  approvalNumber: string;
+  approvalStatus: ApprovalStatus;
+}
+
+// GS1 country prefixes used for African pharma markets, one per regulator
+// so generated barcodes look plausible for the medicine's country of approval.
+const GS1_PREFIX: Record<RegulatoryBody, string> = {
+  NAFDAC: "615", // Nigeria
+  KEBS: "616", // Kenya
+  SAHPRA: "600", // South Africa
+};
+
+function ean13CheckDigit(digits12: string): number {
+  const sum = digits12
+    .split("")
+    .reduce((acc, d, i) => acc + Number(d) * (i % 2 === 0 ? 1 : 3), 0);
+  return (10 - (sum % 10)) % 10;
+}
+
+function makeBarcode(regulatoryBody: RegulatoryBody, seq: number): string {
+  const prefix = GS1_PREFIX[regulatoryBody];
+  const body = prefix + seq.toString().padStart(12 - prefix.length, "0");
+  return body + ean13CheckDigit(body);
+}
+
+const medicines: MedicineSeed[] = [
+  { name: "Coartem", genericName: "Artemether-Lumefantrine", manufacturer: "Novartis", dosageForm: "tablet", strength: "20/120mg", regulatoryBody: "NAFDAC", approvalNumber: "A4-1001", approvalStatus: "approved" },
+  { name: "Amoxil", genericName: "Amoxicillin", manufacturer: "Emzor Pharmaceuticals", dosageForm: "capsule", strength: "500mg", regulatoryBody: "NAFDAC", approvalNumber: "A4-1002", approvalStatus: "approved" },
+  { name: "Panadol", genericName: "Paracetamol", manufacturer: "Fidson Healthcare", dosageForm: "tablet", strength: "500mg", regulatoryBody: "NAFDAC", approvalNumber: "A4-1003", approvalStatus: "approved" },
+  { name: "Septrin", genericName: "Cotrimoxazole", manufacturer: "May & Baker Nigeria", dosageForm: "tablet", strength: "480mg", regulatoryBody: "NAFDAC", approvalNumber: "A4-1004", approvalStatus: "approved" },
+  { name: "Glucophage", genericName: "Metformin", manufacturer: "Cipla", dosageForm: "tablet", strength: "500mg", regulatoryBody: "KEBS", approvalNumber: "KEBS/PPB/2001", approvalStatus: "approved" },
+  { name: "Ciprotab", genericName: "Ciprofloxacin", manufacturer: "Universal Corporation", dosageForm: "tablet", strength: "500mg", regulatoryBody: "KEBS", approvalNumber: "KEBS/PPB/2002", approvalStatus: "approved" },
+  { name: "Vibramycin", genericName: "Doxycycline", manufacturer: "Cosmos Pharmaceuticals", dosageForm: "capsule", strength: "100mg", regulatoryBody: "KEBS", approvalNumber: "KEBS/PPB/2003", approvalStatus: "pending" },
+  { name: "Hydrasol", genericName: "Oral Rehydration Salts", manufacturer: "Dawa Limited", dosageForm: "sachet", strength: null, regulatoryBody: "KEBS", approvalNumber: "KEBS/PPB/2004", approvalStatus: "approved" },
+  { name: "Lumartem", genericName: "Artemether-Lumefantrine", manufacturer: "Beta Healthcare", dosageForm: "tablet", strength: "20/120mg", regulatoryBody: "KEBS", approvalNumber: "KEBS/PPB/2005", approvalStatus: "approved" },
+  { name: "Lipitor", genericName: "Atorvastatin", manufacturer: "Aspen Pharmacare", dosageForm: "tablet", strength: "20mg", regulatoryBody: "SAHPRA", approvalNumber: "SAHPRA/3001/01", approvalStatus: "approved" },
+  { name: "Flagyl", genericName: "Metronidazole", manufacturer: "Adcock Ingram", dosageForm: "tablet", strength: "400mg", regulatoryBody: "SAHPRA", approvalNumber: "SAHPRA/3002/01", approvalStatus: "approved" },
+  { name: "Voltaren", genericName: "Diclofenac", manufacturer: "Pharma Dynamics", dosageForm: "tablet", strength: "50mg", regulatoryBody: "SAHPRA", approvalNumber: "SAHPRA/3003/01", approvalStatus: "approved" },
+  { name: "Brufen", genericName: "Ibuprofen", manufacturer: "Cipla South Africa", dosageForm: "tablet", strength: "400mg", regulatoryBody: "SAHPRA", approvalNumber: "SAHPRA/3004/01", approvalStatus: "approved" },
+  { name: "Losec", genericName: "Omeprazole", manufacturer: "Fidson Healthcare", dosageForm: "capsule", strength: "20mg", regulatoryBody: "NAFDAC", approvalNumber: "A4-1005", approvalStatus: "approved" },
+  { name: "Norvasc", genericName: "Amlodipine", manufacturer: "Emzor Pharmaceuticals", dosageForm: "tablet", strength: "5mg", regulatoryBody: "NAFDAC", approvalNumber: "A4-1006", approvalStatus: "approved" },
+  { name: "Cozaar", genericName: "Losartan", manufacturer: "May & Baker Nigeria", dosageForm: "tablet", strength: "50mg", regulatoryBody: "NAFDAC", approvalNumber: "A4-1007", approvalStatus: "expired" },
+  { name: "Microzide", genericName: "Hydrochlorothiazide", manufacturer: "Greenlife Pharmaceuticals", dosageForm: "tablet", strength: "25mg", regulatoryBody: "NAFDAC", approvalNumber: "A4-1008", approvalStatus: "approved" },
+  { name: "Piriton", genericName: "Chlorpheniramine", manufacturer: "Elys Chemical Industries", dosageForm: "tablet", strength: "4mg", regulatoryBody: "KEBS", approvalNumber: "KEBS/PPB/2006", approvalStatus: "approved" },
+  { name: "Ventolin", genericName: "Salbutamol", manufacturer: "Laboratory and Allied Ltd", dosageForm: "inhaler", strength: "100mcg", regulatoryBody: "KEBS", approvalNumber: "KEBS/PPB/2007", approvalStatus: "approved" },
+  { name: "Folicare", genericName: "Folic Acid", manufacturer: "Cosmos Pharmaceuticals", dosageForm: "tablet", strength: "5mg", regulatoryBody: "KEBS", approvalNumber: "KEBS/PPB/2008", approvalStatus: "approved" },
+  { name: "Ferrofol", genericName: "Ferrous Sulphate", manufacturer: "Dawa Limited", dosageForm: "tablet", strength: "200mg", regulatoryBody: "KEBS", approvalNumber: "KEBS/PPB/2009", approvalStatus: "approved" },
+  { name: "Vitasyrup", genericName: "Multivitamin", manufacturer: "Beta Healthcare", dosageForm: "syrup", strength: null, regulatoryBody: "KEBS", approvalNumber: "KEBS/PPB/2010", approvalStatus: "pending" },
+  { name: "Zincade", genericName: "Zinc Sulphate", manufacturer: "Universal Corporation", dosageForm: "tablet", strength: "20mg", regulatoryBody: "KEBS", approvalNumber: "KEBS/PPB/2011", approvalStatus: "approved" },
+  { name: "Redoxon", genericName: "Vitamin C", manufacturer: "Aspen Pharmacare", dosageForm: "tablet", strength: "100mg", regulatoryBody: "SAHPRA", approvalNumber: "SAHPRA/3005/01", approvalStatus: "approved" },
+  { name: "Quinex", genericName: "Quinine Sulphate", manufacturer: "Adcock Ingram", dosageForm: "tablet", strength: "300mg", regulatoryBody: "SAHPRA", approvalNumber: "SAHPRA/3006/01", approvalStatus: "approved" },
+  { name: "Fansidar", genericName: "Sulfadoxine-Pyrimethamine", manufacturer: "Pharma Dynamics", dosageForm: "tablet", strength: "500/25mg", regulatoryBody: "SAHPRA", approvalNumber: "SAHPRA/3007/01", approvalStatus: "approved" },
+  { name: "Terramycin", genericName: "Tetracycline", manufacturer: "Cipla South Africa", dosageForm: "ointment", strength: "1%", regulatoryBody: "SAHPRA", approvalNumber: "SAHPRA/3008/01", approvalStatus: "rejected" },
+  { name: "Gaviscon", genericName: "Magnesium Trisilicate", manufacturer: "Fidson Healthcare", dosageForm: "tablet", strength: "500mg", regulatoryBody: "NAFDAC", approvalNumber: "A4-1009", approvalStatus: "approved" },
+  { name: "Valium", genericName: "Diazepam", manufacturer: "Emzor Pharmaceuticals", dosageForm: "tablet", strength: "5mg", regulatoryBody: "NAFDAC", approvalNumber: "A4-1010", approvalStatus: "approved" },
+  { name: "Actrapid", genericName: "Insulin Human Soluble", manufacturer: "Novo Nordisk", dosageForm: "injection", strength: "100IU/ml", regulatoryBody: "NAFDAC", approvalNumber: "A4-1011", approvalStatus: "approved" },
+];
+
+async function seed() {
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+  try {
+    const regulatorSeq: Record<RegulatoryBody, number> = { NAFDAC: 0, KEBS: 0, SAHPRA: 0 };
+
+    for (const medicine of medicines) {
+      regulatorSeq[medicine.regulatoryBody] += 1;
+      const barcode = makeBarcode(medicine.regulatoryBody, regulatorSeq[medicine.regulatoryBody]);
+
+      await pool.query(
+        `INSERT INTO medicines
+          (name, generic_name, manufacturer, dosage_form, strength, barcode, regulatory_body, approval_number, approval_status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (barcode) DO UPDATE SET
+           name = EXCLUDED.name,
+           generic_name = EXCLUDED.generic_name,
+           manufacturer = EXCLUDED.manufacturer,
+           dosage_form = EXCLUDED.dosage_form,
+           strength = EXCLUDED.strength,
+           regulatory_body = EXCLUDED.regulatory_body,
+           approval_number = EXCLUDED.approval_number,
+           approval_status = EXCLUDED.approval_status,
+           updated_at = now()`,
+        [
+          medicine.name,
+          medicine.genericName,
+          medicine.manufacturer,
+          medicine.dosageForm,
+          medicine.strength,
+          barcode,
+          medicine.regulatoryBody,
+          medicine.approvalNumber,
+          medicine.approvalStatus,
+        ]
+      );
+    }
+
+    const { rows } = await pool.query<{ count: string }>("SELECT count(*) FROM medicines");
+    console.log(`Seeded ${medicines.length} medicines. Table now has ${rows[0].count} rows.`);
+  } finally {
+    await pool.end();
+  }
+}
+
+seed().catch((err) => {
+  console.error("Seed failed:", err);
+  process.exit(1);
+});

@@ -25,6 +25,11 @@ CREATE TABLE medicines (
     manufacturer VARCHAR(255) NOT NULL,
     dosage_form VARCHAR(100),
     strength VARCHAR(100),
+    barcode VARCHAR(13) NOT NULL UNIQUE CHECK (barcode ~ '^[0-9]{13}$'),
+    regulatory_body VARCHAR(20) NOT NULL,
+    approval_number VARCHAR(50) NOT NULL,
+    approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'
+        CHECK (approval_status IN ('approved', 'pending', 'rejected', 'expired')),
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -75,6 +80,25 @@ CREATE TABLE reports (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(64) NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Blacklist of access tokens invalidated before their natural expiry (e.g. on logout).
+-- Rows past expires_at are harmless and can be purged periodically.
+CREATE TABLE revoked_access_tokens (
+    jti UUID PRIMARY KEY,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
+CREATE INDEX idx_revoked_access_tokens_expires_at ON revoked_access_tokens(expires_at);
 CREATE INDEX idx_medicines_created_by ON medicines(created_by);
 CREATE INDEX idx_batch_records_medicine_id ON batch_records(medicine_id);
 CREATE INDEX idx_scans_batch_record_id ON scans(batch_record_id);
