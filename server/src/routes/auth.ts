@@ -13,6 +13,28 @@ function isSelfRegisterRole(value: unknown): value is SelfRegisterRole {
   return typeof value === "string" && (SELF_REGISTER_ROLES as readonly string[]).includes(value);
 }
 
+interface UserRow {
+  id: string;
+  email: string;
+  full_name: string;
+  country: string;
+  role: string;
+  is_verified: boolean;
+  created_at: string;
+}
+
+function toUserResponse(row: UserRow) {
+  return {
+    id: row.id,
+    email: row.email,
+    fullName: row.full_name,
+    country: row.country,
+    role: row.role,
+    isVerified: row.is_verified,
+    createdAt: row.created_at,
+  };
+}
+
 async function issueRefreshToken(userId: string) {
   const { token, expiresAt } = generateRefreshToken();
   await pool.query(
@@ -23,10 +45,16 @@ async function issueRefreshToken(userId: string) {
 }
 
 router.post("/register", async (req, res) => {
-  const { email, password, fullName, role } = req.body ?? {};
+  const { email, password, fullName, country, role } = req.body ?? {};
 
-  if (typeof email !== "string" || typeof password !== "string" || typeof fullName !== "string") {
-    res.status(400).json({ error: "email, password, and fullName are required" });
+  if (
+    typeof email !== "string" ||
+    typeof password !== "string" ||
+    typeof fullName !== "string" ||
+    typeof country !== "string" ||
+    country.trim().length === 0
+  ) {
+    res.status(400).json({ error: "email, password, fullName, and country are required" });
     return;
   }
 
@@ -45,14 +73,14 @@ router.post("/register", async (req, res) => {
 
   const passwordHash = await bcrypt.hash(password, 10);
 
-  const { rows } = await pool.query(
-    `INSERT INTO users (email, password_hash, full_name, role)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id, email, full_name, role, is_verified, created_at`,
-    [email, passwordHash, fullName, resolvedRole]
+  const { rows } = await pool.query<UserRow>(
+    `INSERT INTO users (email, password_hash, full_name, country, role)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id, email, full_name, country, role, is_verified, created_at`,
+    [email, passwordHash, fullName, country, resolvedRole]
   );
 
-  res.status(201).json({ user: rows[0] });
+  res.status(201).json({ user: toUserResponse(rows[0]) });
 });
 
 router.post("/login", async (req, res) => {
@@ -63,8 +91,8 @@ router.post("/login", async (req, res) => {
     return;
   }
 
-  const { rows } = await pool.query(
-    "SELECT id, email, password_hash, full_name, role FROM users WHERE email = $1",
+  const { rows } = await pool.query<UserRow & { password_hash: string }>(
+    "SELECT id, email, password_hash, full_name, country, role, is_verified, created_at FROM users WHERE email = $1",
     [email]
   );
   const user = rows[0];
@@ -86,7 +114,7 @@ router.post("/login", async (req, res) => {
   res.status(200).json({
     accessToken,
     refreshToken,
-    user: { id: user.id, email: user.email, fullName: user.full_name, role: user.role },
+    user: toUserResponse(user),
   });
 });
 
@@ -143,8 +171,8 @@ router.post("/logout", authenticate, async (req, res) => {
 });
 
 router.get("/me", authenticate, async (req, res) => {
-  const { rows } = await pool.query(
-    "SELECT id, email, full_name, role, is_verified, created_at FROM users WHERE id = $1",
+  const { rows } = await pool.query<UserRow>(
+    "SELECT id, email, full_name, country, role, is_verified, created_at FROM users WHERE id = $1",
     [req.user?.sub]
   );
 
@@ -153,7 +181,7 @@ router.get("/me", authenticate, async (req, res) => {
     return;
   }
 
-  res.status(200).json({ user: rows[0] });
+  res.status(200).json({ user: toUserResponse(rows[0]) });
 });
 
 export default router;
