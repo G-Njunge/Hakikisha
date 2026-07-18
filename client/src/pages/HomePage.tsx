@@ -16,6 +16,9 @@ export default function HomePage() {
         <p>
           <Link to="/login">Login</Link> or <Link to="/register">Register</Link>
         </p>
+        <p>
+          <Link to="/barcode">Scan barcode</Link>
+        </p>
       </div>
     );
   }
@@ -28,6 +31,9 @@ export default function HomePage() {
       </p>
       <p>Role: {user.role}</p>
       <p>Country: {user.country}</p>
+      <p>
+        <Link to="/barcode">Scan barcode</Link>
+      </p>
       <button type="button" onClick={() => logout()}>
         Logout
       </button>

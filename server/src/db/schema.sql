@@ -81,6 +81,43 @@ CREATE TABLE reports (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TYPE photo_angle AS ENUM ('front', 'back');
+
+CREATE TABLE medicine_photos (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    medicine_id UUID NOT NULL REFERENCES medicines(id) ON DELETE CASCADE,
+    angle photo_angle NOT NULL,
+    image_url TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (medicine_id, angle)
+);
+
+CREATE TYPE checklist_section AS ENUM ('package_verification', 'safety_comparison');
+
+-- Powers two screens in the post-scan flow from the same table:
+-- 'package_verification' -> "How to Identify a Genuine Package" (✓ list)
+-- 'safety_comparison'    -> "Things to Compare" (☐ list)
+CREATE TABLE verification_checklist_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    medicine_id UUID NOT NULL REFERENCES medicines(id) ON DELETE CASCADE,
+    section checklist_section NOT NULL,
+    label VARCHAR(255) NOT NULL,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (medicine_id, section, label)
+);
+
+CREATE TABLE pharmacies (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    address VARCHAR(255) NOT NULL,
+    latitude DOUBLE PRECISION NOT NULL,
+    longitude DOUBLE PRECISION NOT NULL,
+    phone VARCHAR(50),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (name, address)
+);
+
 CREATE TABLE refresh_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -106,3 +143,5 @@ CREATE INDEX idx_scans_batch_record_id ON scans(batch_record_id);
 CREATE INDEX idx_scans_scanned_by ON scans(scanned_by);
 CREATE INDEX idx_reports_scan_id ON reports(scan_id);
 CREATE INDEX idx_reports_status ON reports(status);
+CREATE INDEX idx_medicine_photos_medicine_id ON medicine_photos(medicine_id);
+CREATE INDEX idx_verification_checklist_items_medicine_id ON verification_checklist_items(medicine_id, section, display_order);

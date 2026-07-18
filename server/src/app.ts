@@ -1,6 +1,8 @@
 import express, { NextFunction, Request, Response } from "express";
 import cors from "cors";
 import authRouter from "./routes/auth";
+import medicinesRouter from "./routes/medicines";
+import pharmaciesRouter from "./routes/pharmacies";
 
 const app = express();
 
@@ -12,6 +14,8 @@ app.get("/health", (req: Request, res: Response) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/medicines", medicinesRouter);
+app.use("/api/pharmacies", pharmaciesRouter);
 
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   if (res.headersSent) {

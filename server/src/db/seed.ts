@@ -71,6 +71,58 @@ const medicines: MedicineSeed[] = [
   { name: "Actrapid", genericName: "Insulin Human Soluble", manufacturer: "Novo Nordisk", dosageForm: "injection", strength: "100IU/ml", regulatoryBody: "NAFDAC", approvalNumber: "A4-1011", approvalStatus: "approved" },
 ];
 
+// Generic, dosage-form-aware verification guidance. Real per-medicine visual
+// specifics (exact packaging colour, logo placement, etc.) must come from
+// each manufacturer's official artwork before this goes to production —
+// these placeholders exist so the new scan flow has something to render.
+const FORM_SPECIFIC_CHECK: Record<string, string> = {
+  tablet: "Tablets/caplets uniform in colour, shape and imprint",
+  caplet: "Tablets/caplets uniform in colour, shape and imprint",
+  capsule: "Capsules uniform in colour and free of leakage",
+  syrup: "Tamper-evident bottle cap seal unbroken",
+  sachet: "Sachet seal unbroken, no tears or re-gluing",
+  inhaler: "Canister nozzle cap intact, dose counter (if any) functional",
+  injection: "Vial/ampoule seal unbroken, solution clear and particle-free",
+  ointment: "Tube seal intact and unpunctured at the nozzle",
+};
+
+function packageVerificationItems(dosageForm: string): string[] {
+  const formCheck = FORM_SPECIFIC_CHECK[dosageForm.toLowerCase()] ?? "Packaging matches the manufacturer's official design";
+  return [
+    "Packaging colours and print quality match the official design",
+    formCheck,
+    "Hologram or security seal present and not peeling",
+    "Batch number and expiry date are laser-printed, not smudged or re-printed",
+    "Patient information leaflet included",
+    "Foil/blister seal intact with no puncture marks",
+  ];
+}
+
+const SAFETY_COMPARISON_ITEMS = ["Logo position", "Colours", "Hologram", "Batch printing", "Expiry printing"];
+
+interface PharmacySeed {
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  phone: string;
+}
+
+const pharmacies: PharmacySeed[] = [
+  { name: "MedPlus Pharmacy - Ikeja", address: "45 Allen Avenue, Ikeja, Lagos, Nigeria", latitude: 6.6018, longitude: 3.3515, phone: "+234-1-2716842" },
+  { name: "HealthPlus Pharmacy - Victoria Island", address: "270B Ozumba Mbadiwe Ave, Victoria Island, Lagos, Nigeria", latitude: 6.4281, longitude: 3.4219, phone: "+234-1-2703030" },
+  { name: "Alpha Pharmacy - Wuse", address: "Plot 123 Aminu Kano Crescent, Wuse 2, Abuja, Nigeria", latitude: 9.0817, longitude: 7.4875, phone: "+234-9-2345678" },
+  { name: "Goodlife Pharmacy - Westlands", address: "Sarit Centre, Westlands, Nairobi, Kenya", latitude: -1.2634, longitude: 36.8047, phone: "+254-20-4451234" },
+  { name: "Mydawa Pharmacy - CBD", address: "Kimathi Street, Nairobi, Kenya", latitude: -1.2833, longitude: 36.8236, phone: "+254-20-2224455" },
+  { name: "Clicks Pharmacy - Sandton", address: "Sandton City Mall, Sandton, Johannesburg, South Africa", latitude: -26.1076, longitude: 28.0567, phone: "+27-11-7834567" },
+  { name: "Dis-Chem Pharmacy - Rosebank", address: "The Zone, Rosebank, Johannesburg, South Africa", latitude: -26.1467, longitude: 28.0436, phone: "+27-11-4471234" },
+];
+
+function placeholderPhotoUrl(medicineName: string, angle: "front" | "back"): string {
+  const label = encodeURIComponent(`${medicineName} - ${angle}`);
+  return `https://placehold.co/400x600?text=${label}`;
+}
+
 async function seed() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
@@ -81,7 +133,7 @@ async function seed() {
       regulatorSeq[medicine.regulatoryBody] += 1;
       const barcode = makeBarcode(medicine.regulatoryBody, regulatorSeq[medicine.regulatoryBody]);
 
-      await pool.query(
+      const { rows: medicineRows } = await pool.query<{ id: string }>(
         `INSERT INTO medicines
           (name, generic_name, manufacturer, dosage_form, strength, barcode, regulatory_body, approval_number, approval_status)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -94,7 +146,8 @@ async function seed() {
            regulatory_body = EXCLUDED.regulatory_body,
            approval_number = EXCLUDED.approval_number,
            approval_status = EXCLUDED.approval_status,
-           updated_at = now()`,
+           updated_at = now()
+         RETURNING id`,
         [
           medicine.name,
           medicine.genericName,
@@ -107,10 +160,51 @@ async function seed() {
           medicine.approvalStatus,
         ]
       );
+      const medicineId = medicineRows[0].id;
+
+      for (const angle of ["front", "back"] as const) {
+        await pool.query(
+          `INSERT INTO medicine_photos (medicine_id, angle, image_url)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (medicine_id, angle) DO UPDATE SET image_url = EXCLUDED.image_url`,
+          [medicineId, angle, placeholderPhotoUrl(medicine.name, angle)]
+        );
+      }
+
+      const packageItems = packageVerificationItems(medicine.dosageForm);
+      for (const [index, label] of packageItems.entries()) {
+        await pool.query(
+          `INSERT INTO verification_checklist_items (medicine_id, section, label, display_order)
+           VALUES ($1, 'package_verification', $2, $3)
+           ON CONFLICT (medicine_id, section, label) DO UPDATE SET display_order = EXCLUDED.display_order`,
+          [medicineId, label, index]
+        );
+      }
+
+      for (const [index, label] of SAFETY_COMPARISON_ITEMS.entries()) {
+        await pool.query(
+          `INSERT INTO verification_checklist_items (medicine_id, section, label, display_order)
+           VALUES ($1, 'safety_comparison', $2, $3)
+           ON CONFLICT (medicine_id, section, label) DO UPDATE SET display_order = EXCLUDED.display_order`,
+          [medicineId, label, index]
+        );
+      }
+    }
+
+    for (const pharmacy of pharmacies) {
+      await pool.query(
+        `INSERT INTO pharmacies (name, address, latitude, longitude, phone)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (name, address) DO UPDATE SET
+           latitude = EXCLUDED.latitude,
+           longitude = EXCLUDED.longitude,
+           phone = EXCLUDED.phone`,
+        [pharmacy.name, pharmacy.address, pharmacy.latitude, pharmacy.longitude, pharmacy.phone]
+      );
     }
 
     const { rows } = await pool.query<{ count: string }>("SELECT count(*) FROM medicines");
-    console.log(`Seeded ${medicines.length} medicines. Table now has ${rows[0].count} rows.`);
+    console.log(`Seeded ${medicines.length} medicines (with photos + checklists) and ${pharmacies.length} pharmacies. Table now has ${rows[0].count} rows.`);
   } finally {
     await pool.end();
   }
