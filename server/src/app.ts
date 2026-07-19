@@ -4,11 +4,14 @@ import authRouter from "./routes/auth";
 import medicinesRouter from "./routes/medicines";
 import pharmaciesRouter from "./routes/pharmacies";
 import scansRouter from "./routes/scans";
+import reportsRouter from "./routes/reports";
 
 const app = express();
 
 app.use(cors({ origin: process.env.CLIENT_URL ?? "http://localhost:5173" }));
-app.use(express.json());
+// Raised from Express's 100kb default so report submissions can carry a
+// base64-encoded photo (interim storage until real object-storage/URLs).
+app.use(express.json({ limit: "8mb" }));
 
 app.get("/health", (req: Request, res: Response) => {
   res.status(200).json({ status: "ok" });
@@ -18,6 +21,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/medicines", medicinesRouter);
 app.use("/api/pharmacies", pharmaciesRouter);
 app.use("/api/scans", scansRouter);
+app.use("/api/reports", reportsRouter);
 
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   if (res.headersSent) {

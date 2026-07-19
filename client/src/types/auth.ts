@@ -1,4 +1,8 @@
-export type Role = "manufacturer" | "pharmacist" | "consumer";
+// Full set of roles a user account can have. Only a subset is selectable via
+// self-registration (see SelfRegisterRole) — "admin" accounts are provisioned
+// directly, not through POST /api/auth/register.
+export type Role = "admin" | "manufacturer" | "pharmacist" | "consumer";
+export type SelfRegisterRole = Exclude<Role, "admin">;
 
 export interface User {
   id: string;
@@ -13,7 +17,7 @@ export interface RegisterPayload {
   password: string;
   fullName: string;
   country: string;
-  role: Role;
+  role: SelfRegisterRole;
 }
 
 export interface LoginPayload {

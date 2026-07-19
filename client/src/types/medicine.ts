@@ -27,6 +27,7 @@ export interface MedicineSearchResult {
 
 export interface BarcodeVerificationResult {
   found: boolean;
+  scanId: string;
   message?: string;
   medicine?: Medicine;
   batchNumber?: string;
@@ -59,6 +60,7 @@ export type ScanStatus = "VERIFIED" | "UNVERIFIED";
 
 export interface ScanResult {
   status: ScanStatus;
+  scanId: string;
   medicine: {
     id: string;
     name: string;

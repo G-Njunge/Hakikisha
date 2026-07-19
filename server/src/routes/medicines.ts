@@ -79,6 +79,7 @@ router.get("/barcode/:barcode", async (req, res) => {
   if (!result.found) {
     res.status(200).json({
       found: false,
+      scanId: result.scanId,
       message: "This barcode does not exist in the Hakikisha database.",
       verificationStatus: "Unknown",
     });
@@ -87,6 +88,7 @@ router.get("/barcode/:barcode", async (req, res) => {
 
   res.status(200).json({
     found: true,
+    scanId: result.scanId,
     medicine: toMedicineResponse(result.medicine),
     batchNumber: result.batchNumber ?? "Not listed",
     expiryDate: result.expiryDate,

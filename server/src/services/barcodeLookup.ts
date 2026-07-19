@@ -41,9 +41,10 @@ export function toMedicineResponse(row: MedicineRow) {
 export type ScanResultCode = "authentic" | "expired" | "unknown";
 
 export type BarcodeLookupResult =
-  | { found: false }
+  | { found: false; scanId: string }
   | {
       found: true;
+      scanId: string;
       scanResult: ScanResultCode;
       medicine: MedicineRow;
       batchNumber: string | null;
@@ -74,27 +75,30 @@ export async function lookupBarcode(barcode: string, options: LookupOptions): Pr
   );
 
   if (rows.length === 0) {
-    await pool.query(
+    const { rows: scanRows } = await pool.query<{ id: string }>(
       `INSERT INTO scans (batch_record_id, scanned_by, result, latitude, longitude)
-       VALUES (NULL, $1, 'unknown', $2, $3)`,
+       VALUES (NULL, $1, 'unknown', $2, $3)
+       RETURNING id`,
       [scannedBy, latitude, longitude]
     );
 
-    return { found: false };
+    return { found: false, scanId: scanRows[0].id };
   }
 
   const row = rows[0];
   const isExpired = row.expiry_date !== null && new Date(row.expiry_date) < new Date();
   const scanResult: ScanResultCode = isExpired ? "expired" : row.approval_status === "approved" ? "authentic" : "unknown";
 
-  await pool.query(
+  const { rows: scanRows } = await pool.query<{ id: string }>(
     `INSERT INTO scans (batch_record_id, scanned_by, result, latitude, longitude)
-     VALUES ($1, $2, $3, $4, $5)`,
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id`,
     [row.batch_id, scannedBy, scanResult, latitude, longitude]
   );
 
   return {
     found: true,
+    scanId: scanRows[0].id,
     scanResult,
     medicine: row,
     batchNumber: row.batch_number ?? null,

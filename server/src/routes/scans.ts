@@ -23,6 +23,7 @@ router.post("/", async (req, res) => {
   if (!result.found) {
     res.status(200).json({
       status: "UNVERIFIED",
+      scanId: result.scanId,
       medicine: null,
       batchNumber: null,
       message: "This barcode does not exist in the Hakikisha database.",
@@ -34,6 +35,7 @@ router.post("/", async (req, res) => {
 
   res.status(200).json({
     status: isVerified ? "VERIFIED" : "UNVERIFIED",
+    scanId: result.scanId,
     medicine: {
       id: result.medicine.id,
       name: result.medicine.name,

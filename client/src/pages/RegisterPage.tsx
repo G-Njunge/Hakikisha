@@ -2,9 +2,9 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import type { Role } from "../types/auth";
+import type { SelfRegisterRole } from "../types/auth";
 
-const ROLES: Role[] = ["consumer", "pharmacist", "manufacturer"];
+const ROLES: SelfRegisterRole[] = ["consumer", "pharmacist", "manufacturer"];
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -14,7 +14,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [country, setCountry] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("consumer");
+  const [role, setRole] = useState<SelfRegisterRole>("consumer");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -92,7 +92,7 @@ export default function RegisterPage() {
         <div>
           <label htmlFor="role">Role</label>
           <br />
-          <select id="role" value={role} onChange={(e) => setRole(e.target.value as Role)}>
+          <select id="role" value={role} onChange={(e) => setRole(e.target.value as SelfRegisterRole)}>
             {ROLES.map((r) => (
               <option key={r} value={r}>
                 {r}

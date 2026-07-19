@@ -320,6 +320,11 @@ export default function BarcodeScanPage() {
                 <p>{scanResult.message ?? "This barcode does not exist in the Hakikisha database."}</p>
                 <p>This does NOT necessarily mean the medicine is counterfeit.</p>
                 <p>Please verify with the manufacturer or pharmacy.</p>
+                <p className="page-link-row">
+                  <Link to="/report" state={{ scanId: scanResult.scanId }}>
+                    Report this as counterfeit
+                  </Link>
+                </p>
               </div>
             )}
           </>
@@ -350,7 +355,10 @@ export default function BarcodeScanPage() {
             <p className="page-link-row">
               <button type="button" onClick={goToPhotos}>
                 Continue to reference photos
-              </button>
+              </button>{" "}
+              <Link to="/report" state={{ scanId: scanResult.scanId, productName: scanResult.medicine.name }}>
+                Report this as counterfeit
+              </Link>
             </p>
           </div>
         )}

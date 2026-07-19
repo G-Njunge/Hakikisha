@@ -36,3 +36,12 @@ export default async function authenticate(req: Request, res: Response, next: Ne
   req.user = payload as Request["user"];
   next();
 }
+
+// Must run after `authenticate` — relies on req.user already being set.
+export function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (req.user?.role !== "admin") {
+    res.status(403).json({ error: "Admin access required" });
+    return;
+  }
+  next();
+}

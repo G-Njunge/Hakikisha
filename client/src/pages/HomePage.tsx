@@ -34,6 +34,14 @@ export default function HomePage() {
       <p>
         <Link to="/barcode">Scan barcode</Link>
       </p>
+      <p>
+        <Link to="/report">Report counterfeit medicine</Link>
+      </p>
+      {user.role === "admin" && (
+        <p>
+          <Link to="/admin/reports">Admin: Review reports</Link>
+        </p>
+      )}
       <button type="button" onClick={() => logout()}>
         Logout
       </button>

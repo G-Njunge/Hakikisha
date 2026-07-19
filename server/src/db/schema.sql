@@ -73,12 +73,18 @@ CREATE TABLE reports (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     scan_id UUID REFERENCES scans(id) ON DELETE SET NULL,
     reported_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    product_name VARCHAR(255),
     description TEXT NOT NULL,
+    purchase_location VARCHAR(255),
+    -- Interim storage as a base64 data URL; swap for a real object-storage URL
+    -- (Railway volume / S3 / etc.) before this handles real traffic.
+    photo_url TEXT,
     status report_status NOT NULL DEFAULT 'pending',
     resolved_by UUID REFERENCES users(id) ON DELETE SET NULL,
     resolved_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (scan_id IS NOT NULL OR product_name IS NOT NULL)
 );
 
 CREATE TYPE photo_angle AS ENUM ('front', 'back');
@@ -143,5 +149,6 @@ CREATE INDEX idx_scans_batch_record_id ON scans(batch_record_id);
 CREATE INDEX idx_scans_scanned_by ON scans(scanned_by);
 CREATE INDEX idx_reports_scan_id ON reports(scan_id);
 CREATE INDEX idx_reports_status ON reports(status);
+CREATE INDEX idx_reports_reported_by ON reports(reported_by);
 CREATE INDEX idx_medicine_photos_medicine_id ON medicine_photos(medicine_id);
 CREATE INDEX idx_verification_checklist_items_medicine_id ON verification_checklist_items(medicine_id, section, display_order);
