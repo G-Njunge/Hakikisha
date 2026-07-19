@@ -1,31 +1,12 @@
 import { Router } from "express";
 import pool from "../db/pool";
+import { lookupBarcode, toMedicineResponse } from "../services/barcodeLookup";
+import type { MedicineRow } from "../services/barcodeLookup";
 
 const router = Router();
 
 const PAGE_SIZE = 10;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-interface MedicineRow {
-  id: string;
-  name: string;
-  generic_name: string | null;
-  manufacturer: string;
-  dosage_form: string | null;
-  strength: string | null;
-  barcode: string;
-  regulatory_body: string;
-  approval_number: string;
-  approval_status: string;
-  created_at: string;
-  updated_at: string;
-}
-
-interface BatchRow {
-  batch_number: string;
-  expiry_date: string;
-  status: string;
-}
 
 interface MedicinePhotoRow {
   angle: "front" | "back";
@@ -35,23 +16,6 @@ interface MedicinePhotoRow {
 interface ChecklistItemRow {
   section: "package_verification" | "safety_comparison";
   label: string;
-}
-
-function toMedicineResponse(row: MedicineRow) {
-  return {
-    id: row.id,
-    name: row.name,
-    genericName: row.generic_name,
-    manufacturer: row.manufacturer,
-    dosageForm: row.dosage_form,
-    strength: row.strength,
-    barcode: row.barcode,
-    regulatoryBody: row.regulatory_body,
-    approvalNumber: row.approval_number,
-    approvalStatus: row.approval_status,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  };
 }
 
 function parsePage(value: unknown): number {
@@ -110,23 +74,9 @@ router.get("/barcode/:barcode", async (req, res) => {
     return;
   }
 
-  const { rows } = await pool.query<MedicineRow>(
-    `SELECT m.*, br.id AS batch_id, br.batch_number, br.expiry_date, br.status
-     FROM medicines m
-     LEFT JOIN batch_records br ON br.medicine_id = m.id
-     WHERE m.barcode = $1
-     ORDER BY br.expiry_date DESC NULLS LAST
-     LIMIT 1`,
-    [barcode]
-  );
+  const result = await lookupBarcode(barcode, { latitude, longitude, scannedBy: req.user?.sub ?? null });
 
-  if (rows.length === 0) {
-    await pool.query(
-      `INSERT INTO scans (batch_record_id, scanned_by, result, latitude, longitude)
-       VALUES (NULL, $1, 'unknown', $2, $3)`,
-      [req.user?.sub ?? null, latitude, longitude]
-    );
-
+  if (!result.found) {
     res.status(200).json({
       found: false,
       message: "This barcode does not exist in the Hakikisha database.",
@@ -135,23 +85,13 @@ router.get("/barcode/:barcode", async (req, res) => {
     return;
   }
 
-  const row = rows[0] as MedicineRow & BatchRow & { batch_id: string | null };
-  const isExpired = row.expiry_date !== null && new Date(row.expiry_date) < new Date();
-  const scanResult = isExpired ? "expired" : row.approval_status === "approved" ? "authentic" : "unknown";
-
-  await pool.query(
-    `INSERT INTO scans (batch_record_id, scanned_by, result, latitude, longitude)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [row.batch_id, req.user?.sub ?? null, scanResult, latitude, longitude]
-  );
-
   res.status(200).json({
     found: true,
-    medicine: toMedicineResponse(row),
-    batchNumber: row.batch_number ?? "Not listed",
-    expiryDate: row.expiry_date ?? null,
-    registrationStatus: row.approval_status === "approved" ? "Registered" : row.approval_status,
-    verificationStatus: row.approval_status === "approved" ? "Verified" : "Pending review",
+    medicine: toMedicineResponse(result.medicine),
+    batchNumber: result.batchNumber ?? "Not listed",
+    expiryDate: result.expiryDate,
+    registrationStatus: result.medicine.approval_status === "approved" ? "Registered" : result.medicine.approval_status,
+    verificationStatus: result.medicine.approval_status === "approved" ? "Verified" : "Pending review",
   });
 });
 

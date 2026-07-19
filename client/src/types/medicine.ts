@@ -54,3 +54,17 @@ export interface NearbyPharmacy {
   phone: string | null;
   distanceKm: number;
 }
+
+export type ScanStatus = "VERIFIED" | "UNVERIFIED";
+
+export interface ScanResult {
+  status: ScanStatus;
+  medicine: {
+    id: string;
+    name: string;
+    manufacturer: string;
+    approvalStatus: ApprovalStatus;
+  } | null;
+  batchNumber: string | null;
+  message?: string;
+}

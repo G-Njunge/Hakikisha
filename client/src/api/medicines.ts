@@ -5,6 +5,7 @@ import type {
   BarcodeVerificationResult,
   MedicineVerificationProfile,
   NearbyPharmacy,
+  ScanResult,
 } from "../types/medicine";
 
 export async function searchMedicines(q: string, page = 1): Promise<MedicineSearchResult> {
@@ -39,4 +40,13 @@ export async function getNearbyPharmacies(lat: number, lng: number): Promise<Nea
     params: { lat, lng },
   });
   return data.results;
+}
+
+export async function scanBarcode(barcode: string, coords?: { lat: number; lng: number }): Promise<ScanResult> {
+  const { data } = await apiClient.post<ScanResult>("/api/scans", {
+    barcode,
+    lat: coords?.lat,
+    lng: coords?.lng,
+  });
+  return data;
 }

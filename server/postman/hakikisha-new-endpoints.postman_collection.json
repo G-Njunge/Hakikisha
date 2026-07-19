@@ -1,0 +1,237 @@
+{
+  "info": {
+    "name": "Hakikisha - New Endpoints (Scan Flow)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "medicineId", "value": "f63c8164-0ded-4e10-a35f-5146c6733941" },
+    { "key": "validBarcode", "value": "6150000000037" },
+    { "key": "unknownBarcode", "value": "9999999999999" }
+  ],
+  "item": [
+    {
+      "name": "Barcode lookup - found (Panadol)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/medicines/barcode/{{validBarcode}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "medicines", "barcode", "{{validBarcode}}"]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('found is true', () => pm.expect(pm.response.json().found).to.be.true);",
+              "pm.test('has medicine name', () => pm.expect(pm.response.json().medicine.name).to.eql('Panadol'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Barcode lookup - found, with scan location",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/medicines/barcode/{{validBarcode}}?lat=6.5244&lng=3.3792",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "medicines", "barcode", "{{validBarcode}}"],
+          "query": [
+            { "key": "lat", "value": "6.5244" },
+            { "key": "lng", "value": "3.3792" }
+          ]
+        },
+        "description": "lat/lng are optional; when present they're stored on the scans row created by this lookup."
+      },
+      "response": []
+    },
+    {
+      "name": "Barcode lookup - not found",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/medicines/barcode/{{unknownBarcode}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "medicines", "barcode", "{{unknownBarcode}}"]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('found is false', () => pm.expect(pm.response.json().found).to.be.false);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Barcode lookup - invalid format (400)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/medicines/barcode/abc123",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "medicines", "barcode", "abc123"]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": ["pm.test('status 400', () => pm.response.to.have.status(400));"],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Medicine verification profile",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/medicines/{{medicineId}}/verification",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "medicines", "{{medicineId}}", "verification"]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('has photos.front and photos.back', () => { pm.expect(body.photos).to.have.property('front'); pm.expect(body.photos).to.have.property('back'); });",
+              "pm.test('has packageVerification list', () => pm.expect(body.packageVerification).to.be.an('array'));",
+              "pm.test('has safetyComparison list', () => pm.expect(body.safetyComparison).to.be.an('array'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Medicine verification profile - not found (404)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/medicines/00000000-0000-0000-0000-000000000000/verification",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "medicines", "00000000-0000-0000-0000-000000000000", "verification"]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": ["pm.test('status 404', () => pm.response.to.have.status(404));"],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Medicine verification profile - invalid id (400)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/medicines/not-a-uuid/verification",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "medicines", "not-a-uuid", "verification"]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": ["pm.test('status 400', () => pm.response.to.have.status(400));"],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Nearby pharmacies - Lagos",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/pharmacies/nearby?lat=6.5244&lng=3.3792",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "pharmacies", "nearby"],
+          "query": [
+            { "key": "lat", "value": "6.5244" },
+            { "key": "lng", "value": "3.3792" }
+          ]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('status 200', () => pm.response.to.have.status(200));",
+              "pm.test('results is an array', () => pm.expect(pm.response.json().results).to.be.an('array'));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Nearby pharmacies - custom radius",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/pharmacies/nearby?lat=6.5244&lng=3.3792&radiusKm=50",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "pharmacies", "nearby"],
+          "query": [
+            { "key": "lat", "value": "6.5244" },
+            { "key": "lng", "value": "3.3792" },
+            { "key": "radiusKm", "value": "50" }
+          ]
+        },
+        "description": "Widen the radius to pull in pharmacies from other seeded cities for comparison."
+      },
+      "response": []
+    },
+    {
+      "name": "Nearby pharmacies - missing coords (400)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/pharmacies/nearby",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "pharmacies", "nearby"]
+        }
+      },
+      "response": [],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": ["pm.test('status 400', () => pm.response.to.have.status(400));"],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    }
+  ]
+}

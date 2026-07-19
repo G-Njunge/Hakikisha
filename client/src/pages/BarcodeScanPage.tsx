@@ -1,12 +1,9 @@
-import { useState } from "react";
-import type { FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import { Link } from "react-router-dom";
-import { getMedicineVerificationProfile, getNearbyPharmacies, verifyBarcode } from "../api/medicines";
-import type {
-  BarcodeVerificationResult,
-  MedicineVerificationProfile,
-  NearbyPharmacy,
-} from "../types/medicine";
+import { Html5Qrcode } from "html5-qrcode";
+import { getMedicineVerificationProfile, getNearbyPharmacies, scanBarcode } from "../api/medicines";
+import type { MedicineVerificationProfile, NearbyPharmacy, ScanResult } from "../types/medicine";
 
 type Step = "scan" | "identified" | "photos" | "package" | "safety" | "pharmacy";
 
@@ -18,6 +15,9 @@ const STEPS: Array<{ key: Step; label: string }> = [
   { key: "safety", label: "Safety information" },
   { key: "pharmacy", label: "Nearby pharmacy" },
 ];
+
+const CAMERA_ELEMENT_ID = "barcode-reader";
+const FILE_SCAN_ELEMENT_ID = "barcode-file-reader";
 
 function StepIndicator({ current }: { current: Step }) {
   const currentIndex = STEPS.findIndex((s) => s.key === current);
@@ -38,11 +38,18 @@ function StepIndicator({ current }: { current: Step }) {
 }
 
 export default function BarcodeScanPage() {
-  const [barcode, setBarcode] = useState("");
   const [step, setStep] = useState<Step>("scan");
-  const [scanResult, setScanResult] = useState<BarcodeVerificationResult | null>(null);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+
+  const [isFileScanning, setIsFileScanning] = useState(false);
+  const [fileScanError, setFileScanError] = useState<string | null>(null);
+  const fileScannerRef = useRef<Html5Qrcode | null>(null);
 
   const [profile, setProfile] = useState<MedicineVerificationProfile | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -54,11 +61,49 @@ export default function BarcodeScanPage() {
   const [pharmacyStatus, setPharmacyStatus] = useState<"idle" | "loading" | "error" | "success">("idle");
   const [pharmacyError, setPharmacyError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!isCameraActive) return;
+
+    const html5QrCode = new Html5Qrcode(CAMERA_ELEMENT_ID);
+    html5QrCodeRef.current = html5QrCode;
+    let decoded = false;
+
+    html5QrCode
+      .start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 150 } },
+        (decodedText) => {
+          if (decoded) return;
+          decoded = true;
+          setIsCameraActive(false);
+          submitBarcode(decodedText);
+        },
+        () => {
+          // Per-frame decode misses while the user is still aiming the camera; not an error.
+        }
+      )
+      .catch((err) => {
+        console.error("Failed to start camera", err);
+        setCameraError("Unable to access the camera. Check permissions and try again.");
+        setIsCameraActive(false);
+      });
+
+    return () => {
+      html5QrCode
+        .stop()
+        .then(() => html5QrCode.clear())
+        .catch(() => {});
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCameraActive]);
+
   function resetFlow() {
-    setBarcode("");
     setStep("scan");
     setScanResult(null);
     setScanError(null);
+    setIsCameraActive(false);
+    setCameraError(null);
+    setFileScanError(null);
     setProfile(null);
     setProfileError(null);
     setComparisonChecks({});
@@ -67,10 +112,9 @@ export default function BarcodeScanPage() {
     setPharmacyError(null);
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!barcode.trim()) {
-      setScanError("Please enter a barcode.");
+  async function submitBarcode(value: string) {
+    if (!value.trim()) {
+      setScanError("No code detected. Please try again.");
       setScanResult(null);
       return;
     }
@@ -80,16 +124,42 @@ export default function BarcodeScanPage() {
     setScanResult(null);
 
     try {
-      const response = await verifyBarcode(barcode.trim());
+      const response = await scanBarcode(value.trim());
       setScanResult(response);
-      if (response.found) {
+      if (response.medicine) {
         setStep("identified");
       }
     } catch (err) {
-      console.error("Barcode verification failed", err);
+      console.error("Barcode scan failed", err);
       setScanError("Unable to verify barcode. Please try again.");
     } finally {
       setIsScanning(false);
+    }
+  }
+
+  function toggleCamera() {
+    setCameraError(null);
+    setIsCameraActive((prev) => !prev);
+  }
+
+  async function handleFileUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setIsCameraActive(false);
+    setFileScanError(null);
+    setIsFileScanning(true);
+
+    try {
+      fileScannerRef.current ??= new Html5Qrcode(FILE_SCAN_ELEMENT_ID);
+      const decodedText = await fileScannerRef.current.scanFile(file, false);
+      await submitBarcode(decodedText);
+    } catch (err) {
+      console.error("Failed to read code from image", err);
+      setFileScanError("Couldn't find a scannable code in that photo. Try a clearer, well-lit shot square to the package.");
+    } finally {
+      setIsFileScanning(false);
     }
   }
 
@@ -159,25 +229,43 @@ export default function BarcodeScanPage() {
 
         {step === "scan" && (
           <>
-            <form className="barcode-form" onSubmit={handleSubmit}>
-              <input
-                className="barcode-input"
-                type="text"
-                placeholder="Enter barcode number"
-                value={barcode}
-                onChange={(event) => setBarcode(event.target.value)}
-              />
-              <button type="submit" disabled={isScanning}>
-                {isScanning ? "Verifying..." : "Verify"}
+            <div className="scan-mode-row">
+              <button type="button" onClick={toggleCamera}>
+                {isCameraActive ? "Stop camera" : "Scan with camera"}
               </button>
-            </form>
+            </div>
 
+            {isCameraActive && (
+              <div className="camera-viewfinder">
+                <div id={CAMERA_ELEMENT_ID} />
+              </div>
+            )}
+            {cameraError && <p className="page-status error">{cameraError}</p>}
+
+            <div className="scan-fallback">
+              <p className="page-status">Camera not working? Upload a photo of the QR code instead.</p>
+              <label className="file-upload-button">
+                {isFileScanning ? "Reading photo..." : "Upload photo"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  disabled={isFileScanning}
+                  hidden
+                />
+              </label>
+              {/* Kept mounted (hidden) so the file-scan Html5Qrcode instance always has an element to bind to. */}
+              <div id={FILE_SCAN_ELEMENT_ID} style={{ display: "none" }} />
+            </div>
+
+            {fileScanError && <p className="page-status error">{fileScanError}</p>}
+            {(isScanning || isFileScanning) && <p className="page-status">Verifying...</p>}
             {scanError && <p className="page-status error">{scanError}</p>}
 
-            {scanResult && !scanResult.found && (
-              <div className="barcode-result">
-                <h2>Unknown Product</h2>
-                <p>This barcode does not exist in the Hakikisha database.</p>
+            {scanResult && !scanResult.medicine && (
+              <div className="scan-card unverified">
+                <h2>UNVERIFIED</h2>
+                <p>{scanResult.message ?? "This barcode does not exist in the Hakikisha database."}</p>
                 <p>This does NOT necessarily mean the medicine is counterfeit.</p>
                 <p>Please verify with the manufacturer or pharmacy.</p>
               </div>
@@ -186,10 +274,14 @@ export default function BarcodeScanPage() {
         )}
 
         {step === "identified" && scanResult?.medicine && (
-          <div className="barcode-result">
-            <h2>✓ Medicine identified</h2>
-            <p>{scanResult.medicine.name}</p>
+          <div className={`scan-card ${scanResult.status === "VERIFIED" ? "verified" : "unverified"}`}>
+            <h2>{scanResult.status === "VERIFIED" ? "✓ VERIFIED" : "⚠ UNVERIFIED"}</h2>
+            {scanResult.message && <p>{scanResult.message}</p>}
             <div className="detail-grid">
+              <div className="detail-item">
+                <span className="detail-label">Name</span>
+                <span className="detail-value">{scanResult.medicine.name}</span>
+              </div>
               <div className="detail-item">
                 <span className="detail-label">Manufacturer</span>
                 <span className="detail-value">{scanResult.medicine.manufacturer}</span>
@@ -199,16 +291,8 @@ export default function BarcodeScanPage() {
                 <span className="detail-value">{scanResult.batchNumber ?? "Not listed"}</span>
               </div>
               <div className="detail-item">
-                <span className="detail-label">Expiry</span>
-                <span className="detail-value">{scanResult.expiryDate ?? "Not listed"}</span>
-              </div>
-              <div className="detail-item">
-                <span className="detail-label">Registration status</span>
-                <span className="detail-value">{scanResult.registrationStatus ?? "Not listed"}</span>
-              </div>
-              <div className="detail-item">
-                <span className="detail-label">Verification status</span>
-                <span className="detail-value">{scanResult.verificationStatus ?? "Not listed"}</span>
+                <span className="detail-label">Approval status</span>
+                <span className="detail-value">{scanResult.medicine.approvalStatus}</span>
               </div>
             </div>
             <p className="page-link-row">

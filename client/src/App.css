@@ -335,6 +335,86 @@
   font-size: 1.1rem;
 }
 
+.scan-mode-row {
+  margin-bottom: 16px;
+}
+
+.scan-fallback {
+  border: 1px dashed #d1d5db;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.scan-fallback .page-status {
+  margin-bottom: 10px;
+}
+
+.file-upload-button {
+  display: inline-block;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  padding: 8px 14px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.file-upload-button:has(input:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.camera-viewfinder {
+  max-width: 320px;
+  margin: 0 auto 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.camera-viewfinder video,
+.camera-viewfinder canvas {
+  width: 100%;
+  height: auto;
+}
+
+.scan-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.scan-card h2 {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+.scan-card.verified {
+  background: #f0fdf4;
+  border-color: #86efac;
+  color: #14532d;
+}
+
+.scan-card.verified h2 {
+  color: #166534;
+}
+
+.scan-card.unverified {
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #78350f;
+}
+
+.scan-card.unverified h2 {
+  color: #92400e;
+}
+
+.scan-card .detail-item {
+  background: rgba(255, 255, 255, 0.6);
+}
+
 .step-indicator {
   display: flex;
   flex-wrap: wrap;
