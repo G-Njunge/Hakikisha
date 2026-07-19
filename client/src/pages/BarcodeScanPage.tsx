@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import { Link } from "react-router-dom";
+import { isAxiosError } from "axios";
 import { Html5Qrcode } from "html5-qrcode";
 import { getMedicineVerificationProfile, getNearbyPharmacies, scanBarcode } from "../api/medicines";
 import type { MedicineVerificationProfile, NearbyPharmacy, ScanResult } from "../types/medicine";
+
+const BARCODE_PATTERN = /^\d{8,13}$/;
 
 type Step = "scan" | "identified" | "photos" | "package" | "safety" | "pharmacy";
 
@@ -42,6 +45,7 @@ export default function BarcodeScanPage() {
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [manualBarcode, setManualBarcode] = useState("");
 
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -84,7 +88,14 @@ export default function BarcodeScanPage() {
       )
       .catch((err) => {
         console.error("Failed to start camera", err);
-        setCameraError("Unable to access the camera. Check permissions and try again.");
+        const message = String(err);
+        if (/NotAllowedError|PermissionDenied/i.test(message)) {
+          setCameraError("Camera access was denied. Enter the code manually below or upload a photo instead.");
+        } else if (/NotFoundError/i.test(message)) {
+          setCameraError("No camera was found on this device. Enter the code manually below or upload a photo instead.");
+        } else {
+          setCameraError("Unable to access the camera. Enter the code manually below or upload a photo instead.");
+        }
         setIsCameraActive(false);
       });
 
@@ -101,6 +112,7 @@ export default function BarcodeScanPage() {
     setStep("scan");
     setScanResult(null);
     setScanError(null);
+    setManualBarcode("");
     setIsCameraActive(false);
     setCameraError(null);
     setFileScanError(null);
@@ -113,8 +125,16 @@ export default function BarcodeScanPage() {
   }
 
   async function submitBarcode(value: string) {
-    if (!value.trim()) {
+    const trimmed = value.trim();
+
+    if (!trimmed) {
       setScanError("No code detected. Please try again.");
+      setScanResult(null);
+      return;
+    }
+
+    if (!BARCODE_PATTERN.test(trimmed)) {
+      setScanError("That doesn't look like a valid barcode (must be 8-13 digits).");
       setScanResult(null);
       return;
     }
@@ -124,17 +144,32 @@ export default function BarcodeScanPage() {
     setScanResult(null);
 
     try {
-      const response = await scanBarcode(value.trim());
+      const response = await scanBarcode(trimmed);
       setScanResult(response);
       if (response.medicine) {
         setStep("identified");
       }
     } catch (err) {
       console.error("Barcode scan failed", err);
-      setScanError("Unable to verify barcode. Please try again.");
+      if (isAxiosError(err)) {
+        if (err.response?.status === 400) {
+          setScanError("That doesn't look like a valid barcode (must be 8-13 digits).");
+        } else if (err.response) {
+          setScanError("Something went wrong verifying this code. Please try again in a moment.");
+        } else {
+          setScanError("Network error — check your connection and try again.");
+        }
+      } else {
+        setScanError("Unable to verify barcode. Please try again.");
+      }
     } finally {
       setIsScanning(false);
     }
+  }
+
+  function handleManualSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    submitBarcode(manualBarcode);
   }
 
   function toggleCamera() {
@@ -243,7 +278,24 @@ export default function BarcodeScanPage() {
             {cameraError && <p className="page-status error">{cameraError}</p>}
 
             <div className="scan-fallback">
-              <p className="page-status">Camera not working? Upload a photo of the QR code instead.</p>
+              <p className="page-status">Camera denied or not working? Enter the code manually.</p>
+              <form className="barcode-form" onSubmit={handleManualSubmit}>
+                <input
+                  className="barcode-input"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Enter the barcode number"
+                  value={manualBarcode}
+                  onChange={(event) => setManualBarcode(event.target.value)}
+                />
+                <button type="submit" disabled={isScanning}>
+                  {isScanning ? "Verifying..." : "Verify"}
+                </button>
+              </form>
+            </div>
+
+            <div className="scan-fallback">
+              <p className="page-status">Or upload a photo of the QR code instead.</p>
               <label className="file-upload-button">
                 {isFileScanning ? "Reading photo..." : "Upload photo"}
                 <input

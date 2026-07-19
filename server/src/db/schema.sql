@@ -26,7 +26,7 @@ CREATE TABLE medicines (
     manufacturer VARCHAR(255) NOT NULL,
     dosage_form VARCHAR(100),
     strength VARCHAR(100),
-    barcode VARCHAR(13) NOT NULL UNIQUE CHECK (barcode ~ '^[0-9]{13}$'),
+    barcode VARCHAR(13) NOT NULL UNIQUE CHECK (barcode ~ '^[0-9]{8,13}$'),
     regulatory_body VARCHAR(20) NOT NULL,
     approval_number VARCHAR(50) NOT NULL,
     approval_status VARCHAR(20) NOT NULL DEFAULT 'approved'
