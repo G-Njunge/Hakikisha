@@ -10,6 +10,7 @@ export interface AuthContextValue {
   login: (payload: LoginPayload) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
+  updateDisplayName: (fullName: string) => Promise<void>;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components -- context and its provider are colocated deliberately
@@ -45,8 +46,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }
 
+  async function updateDisplayName(fullName: string) {
+    const updatedUser = await authApi.updateDisplayName(fullName);
+    setUser(updatedUser);
+  }
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, updateDisplayName }}>
       {children}
     </AuthContext.Provider>
   );

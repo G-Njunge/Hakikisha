@@ -2,12 +2,13 @@ import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import pool from "../db/pool";
 
-export default async function authenticate(req: Request, res: Response, next: NextFunction) {
+// Returns the verified payload, or null if the token is missing/invalid/
+// expired/revoked. Shared by `authenticate` (rejects on null) and
+// `optionalAuthenticate` (proceeds anonymously on null).
+async function verifyAccessToken(req: Request): Promise<Request["user"] | null> {
   const header = req.headers.authorization;
-
   if (!header?.startsWith("Bearer ")) {
-    res.status(401).json({ error: "Missing or invalid Authorization header" });
-    return;
+    return null;
   }
 
   const token = header.slice("Bearer ".length);
@@ -15,25 +16,42 @@ export default async function authenticate(req: Request, res: Response, next: Ne
   let payload: jwt.JwtPayload;
   try {
     const verified = jwt.verify(token, process.env.JWT_SECRET as string);
-
     if (typeof verified === "string" || !verified.sub || !verified.jti) {
-      res.status(401).json({ error: "Invalid token" });
-      return;
+      return null;
     }
-
     payload = verified;
   } catch {
-    res.status(401).json({ error: "Invalid or expired token" });
-    return;
+    return null;
   }
 
   const { rows } = await pool.query("SELECT 1 FROM revoked_access_tokens WHERE jti = $1", [payload.jti]);
   if (rows.length > 0) {
-    res.status(401).json({ error: "Token has been revoked" });
+    return null;
+  }
+
+  return payload as Request["user"];
+}
+
+export default async function authenticate(req: Request, res: Response, next: NextFunction) {
+  const user = await verifyAccessToken(req);
+
+  if (!user) {
+    res.status(401).json({ error: "Missing or invalid Authorization header" });
     return;
   }
 
-  req.user = payload as Request["user"];
+  req.user = user;
+  next();
+}
+
+// For routes that must work anonymously (e.g. scanning) but should still
+// attribute the request to a user when a valid token is present. Never
+// rejects — a missing/invalid/expired token just means req.user stays unset.
+export async function optionalAuthenticate(req: Request, _res: Response, next: NextFunction) {
+  const user = await verifyAccessToken(req);
+  if (user) {
+    req.user = user;
+  }
   next();
 }
 

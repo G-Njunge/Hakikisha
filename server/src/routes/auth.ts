@@ -184,4 +184,73 @@ router.get("/me", authenticate, async (req, res) => {
   res.status(200).json({ user: toUserResponse(rows[0]) });
 });
 
+router.patch("/me", authenticate, async (req, res) => {
+  const { fullName } = req.body ?? {};
+
+  if (typeof fullName !== "string" || fullName.trim().length === 0) {
+    res.status(400).json({ error: "fullName is required" });
+    return;
+  }
+
+  const { rows } = await pool.query<UserRow>(
+    `UPDATE users SET full_name = $1, updated_at = now() WHERE id = $2
+     RETURNING id, email, full_name, country, role, is_verified, created_at`,
+    [fullName.trim(), req.user?.sub]
+  );
+
+  if (rows.length === 0) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  res.status(200).json({ user: toUserResponse(rows[0]) });
+});
+
+router.post("/change-password", authenticate, async (req, res) => {
+  const { currentPassword, newPassword } = req.body ?? {};
+
+  if (typeof currentPassword !== "string" || typeof newPassword !== "string") {
+    res.status(400).json({ error: "currentPassword and newPassword are required" });
+    return;
+  }
+
+  if (newPassword.length < 8) {
+    res.status(400).json({ error: "newPassword must be at least 8 characters" });
+    return;
+  }
+
+  const { rows } = await pool.query<{ password_hash: string }>(
+    "SELECT password_hash FROM users WHERE id = $1",
+    [req.user?.sub]
+  );
+
+  if (rows.length === 0) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  const currentMatches = await bcrypt.compare(currentPassword, rows[0].password_hash);
+  if (!currentMatches) {
+    res.status(401).json({ error: "Current password is incorrect" });
+    return;
+  }
+
+  const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+  await pool.query("UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2", [
+    newPasswordHash,
+    req.user?.sub,
+  ]);
+
+  // Changing the password invalidates every other session — standard
+  // practice so a leaked refresh token stops working once the password
+  // that (presumably) leaked alongside it is rotated out.
+  await pool.query(
+    "UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL",
+    [req.user?.sub]
+  );
+
+  res.status(204).send();
+});
+
 export default router;

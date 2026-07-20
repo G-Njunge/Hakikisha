@@ -7,6 +7,7 @@ import BarcodeScanPage from "./pages/BarcodeScanPage";
 import MedicineDetailPage from "./pages/MedicineDetailPage";
 import ReportCounterfeitPage from "./pages/ReportCounterfeitPage";
 import AdminReportsPage from "./pages/AdminReportsPage";
+import DashboardPage from "./pages/DashboardPage";
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
       <Route path="/medicines/:id" element={<MedicineDetailPage />} />
       <Route path="/report" element={<ReportCounterfeitPage />} />
       <Route path="/admin/reports" element={<AdminReportsPage />} />
+      <Route path="/dashboard" element={<DashboardPage />} />
     </Routes>
   );
 }

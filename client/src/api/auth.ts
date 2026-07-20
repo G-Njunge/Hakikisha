@@ -33,3 +33,12 @@ export async function fetchCurrentUser(): Promise<User> {
   const { data } = await apiClient.get<{ user: User }>("/api/auth/me");
   return data.user;
 }
+
+export async function updateDisplayName(fullName: string): Promise<User> {
+  const { data } = await apiClient.patch<{ user: User }>("/api/auth/me", { fullName });
+  return data.user;
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await apiClient.post("/api/auth/change-password", { currentPassword, newPassword });
+}

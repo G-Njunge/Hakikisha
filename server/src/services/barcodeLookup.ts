@@ -76,10 +76,10 @@ export async function lookupBarcode(barcode: string, options: LookupOptions): Pr
 
   if (rows.length === 0) {
     const { rows: scanRows } = await pool.query<{ id: string }>(
-      `INSERT INTO scans (batch_record_id, scanned_by, result, latitude, longitude)
-       VALUES (NULL, $1, 'unknown', $2, $3)
+      `INSERT INTO scans (batch_record_id, scanned_by, barcode, result, latitude, longitude)
+       VALUES (NULL, $1, $2, 'unknown', $3, $4)
        RETURNING id`,
-      [scannedBy, latitude, longitude]
+      [scannedBy, barcode, latitude, longitude]
     );
 
     return { found: false, scanId: scanRows[0].id };
@@ -90,10 +90,10 @@ export async function lookupBarcode(barcode: string, options: LookupOptions): Pr
   const scanResult: ScanResultCode = isExpired ? "expired" : row.approval_status === "approved" ? "authentic" : "unknown";
 
   const { rows: scanRows } = await pool.query<{ id: string }>(
-    `INSERT INTO scans (batch_record_id, scanned_by, result, latitude, longitude)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO scans (batch_record_id, scanned_by, barcode, result, latitude, longitude)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id`,
-    [row.batch_id, scannedBy, scanResult, latitude, longitude]
+    [row.batch_id, scannedBy, barcode, scanResult, latitude, longitude]
   );
 
   return {

@@ -1,8 +1,14 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
 export default function HomePage() {
   const { user, isLoading, logout } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleLogout() {
+    await logout();
+    navigate("/login");
+  }
 
   if (isLoading) {
     return <p>Loading...</p>;
@@ -37,12 +43,15 @@ export default function HomePage() {
       <p>
         <Link to="/report">Report counterfeit medicine</Link>
       </p>
+      <p>
+        <Link to="/dashboard">My dashboard</Link>
+      </p>
       {user.role === "admin" && (
         <p>
           <Link to="/admin/reports">Admin: Review reports</Link>
         </p>
       )}
-      <button type="button" onClick={() => logout()}>
+      <button type="button" onClick={handleLogout}>
         Logout
       </button>
     </div>

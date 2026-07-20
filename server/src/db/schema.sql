@@ -60,6 +60,10 @@ CREATE TABLE scans (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     batch_record_id UUID REFERENCES batch_records(id) ON DELETE SET NULL,
     scanned_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    -- Nullable because older rows predate this column and can't all be
+    -- backfilled (a "not found" scan never had a matching medicine to trace
+    -- the barcode back through) — always populated for scans going forward.
+    barcode VARCHAR(13),
     result scan_result NOT NULL,
     location VARCHAR(255),
     latitude DOUBLE PRECISION,

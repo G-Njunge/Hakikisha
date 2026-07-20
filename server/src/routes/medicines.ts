@@ -1,5 +1,6 @@
 import { Router } from "express";
 import pool from "../db/pool";
+import { optionalAuthenticate } from "../middleware/auth";
 import { lookupBarcode, toMedicineResponse } from "../services/barcodeLookup";
 import type { MedicineRow } from "../services/barcodeLookup";
 
@@ -64,12 +65,12 @@ function parseCoordinate(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-router.get("/barcode/:barcode", async (req, res) => {
+router.get("/barcode/:barcode", optionalAuthenticate, async (req, res) => {
   const { barcode } = req.params;
   const latitude = parseCoordinate(req.query.lat);
   const longitude = parseCoordinate(req.query.lng);
 
-  if (!/^\d{8,13}$/.test(barcode)) {
+  if (typeof barcode !== "string" || !/^\d{8,13}$/.test(barcode)) {
     res.status(400).json({ error: "Barcode must be numeric" });
     return;
   }
