@@ -117,7 +117,10 @@ export default function MedicineDetailPage() {
         </div>
 
         <p className="page-link-row">
-          <Link to="/search">Back to search</Link>
+          <Link to="/search">Back to search</Link> ·{" "}
+          <Link to="/report" state={{ productName: medicine.name }}>
+            Report this as counterfeit
+          </Link>
         </p>
       </section>
     </main>

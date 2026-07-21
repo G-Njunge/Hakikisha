@@ -49,7 +49,7 @@ function readFileAsDataUrl(file: File): Promise<string> {
 }
 
 export default function ReportCounterfeitPage() {
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { user } = useAuth();
   const location = useLocation();
   const state = (location.state as LocationState | null) ?? null;
 
@@ -134,28 +134,10 @@ export default function ReportCounterfeitPage() {
     }
   }
 
-  if (isAuthLoading) {
-    return (
-      <main className="page-shell">
-        <section className="page-card">
-          <p className="page-status">Loading...</p>
-        </section>
-      </main>
-    );
-  }
-
+  // ProtectedRoute already redirects to /login before this renders when
+  // logged out; this is just a type-narrowing guard for the render below.
   if (!user) {
-    return (
-      <main className="page-shell">
-        <section className="page-card">
-          <h1 className="page-title">Report counterfeit medicine</h1>
-          <p className="page-status">You need to be logged in to submit a report.</p>
-          <p className="page-link-row">
-            <Link to="/login">Login</Link> or <Link to="/register">Register</Link>
-          </p>
-        </section>
-      </main>
-    );
+    return null;
   }
 
   if (submittedReport) {

@@ -532,3 +532,19 @@
   background: #ffffff;
   padding: 14px 16px;
 }
+
+.search-result-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 14px 16px;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.search-result-card:hover {
+  border-color: #2563eb;
+  background: #f9fafb;
+}

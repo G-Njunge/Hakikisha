@@ -18,7 +18,7 @@ function getStatusBadgeClass(status: string): string {
 }
 
 export default function AdminReportsPage() {
-  const { user, isLoading: isAuthLoading } = useAuth();
+  const { user } = useAuth();
 
   const [reports, setReports] = useState<ReportAdminRow[]>([]);
   const [page, setPage] = useState(1);
@@ -72,17 +72,13 @@ export default function AdminReportsPage() {
     }
   }
 
-  if (isAuthLoading) {
-    return (
-      <main className="page-shell">
-        <section className="page-card">
-          <p className="page-status">Loading...</p>
-        </section>
-      </main>
-    );
+  // ProtectedRoute already redirects to /login before this renders when
+  // logged out; this is just a type-narrowing guard for the render below.
+  if (!user) {
+    return null;
   }
 
-  if (!user || !isAdmin) {
+  if (!isAdmin) {
     return (
       <main className="page-shell">
         <section className="page-card">

@@ -20,7 +20,7 @@ Hakikisha/
 │       └── types/                 Shared TS types (medicine.ts)
 ├── server/                   Express API
 │   ├── src/
-│   │   ├── db/                  pool.ts, schema.sql, seed.ts
+│   │   ├── db/                  pool.ts, schema.sql, migrate.ts, seed.ts
 │   │   ├── lib/                   tokens.ts (JWT + refresh token helpers)
 │   │   ├── middleware/            auth.ts (Bearer token verification)
 │   │   ├── routes/                auth.ts, medicines.ts, pharmacies.ts
@@ -48,13 +48,9 @@ Hakikisha/
    CLIENT_URL=http://localhost:5173
    ```
 3. Create the database, then apply the schema:
-   ```
-   psql -d hakikisha_db -f src/db/schema.sql
-   ```
-4. Seed sample data (medicines, reference photos, verification checklists, pharmacies):
-   ```
-   npx ts-node src/db/seed.ts
-   ```
+   - **Brand-new, empty database:** `psql -d hakikisha_db -f src/db/schema.sql`
+   - **Existing database from an earlier version of this app** (e.g. a Railway deployment predating the scan/report/dashboard features): `npm run db:migrate` instead — applies only what's missing, safely re-runnable.
+4. Seed sample data (medicines, reference photos, verification checklists, pharmacies): `npm run db:seed`
 5. Run the API: `npm run dev` (nodemon + ts-node, watches `src/`)
 
 ### Client setup
@@ -133,7 +129,7 @@ If the barcode isn't found, the flow stops at step 1 with an "Unknown Product" m
 - **Checklist text is generic, not per-product.** `packageVerification` items are dosage-form-aware but generic (e.g. "Hologram or security seal present") rather than describing a specific product's actual packaging (exact colours, logo placement, etc.), since no real manufacturer artwork/specs were available to seed accurately. `safetyComparison` is the same fixed 5-item list for every medicine.
 - **Pharmacies aren't linked to specific medicines.** `/api/pharmacies/nearby` returns any nearby pharmacy, not ones confirmed to stock the scanned medicine — there's no stock/inventory join table yet.
 - **No auth on medicine/pharmacy routes.** Anyone can hit `/api/medicines/*` and `/api/pharmacies/*` without logging in (by design, so scanning works for anonymous users) — `scanned_by` on a `scans` row is only populated if a valid Bearer token happens to be present.
-- **No migration tooling.** `schema.sql` is a single hand-maintained file (no versioned migrations); new tables were applied directly via a one-off script during development. Any future schema change needs to be applied manually to existing databases.
+- **No versioned migration tooling.** `schema.sql` is a single hand-maintained file for brand-new databases. `server/src/db/migrate.ts` covers everything added after the original schema (idempotent — safe to run against a database that already has some, none, or all of it) but there's no framework tracking which migrations have run where; every future schema change needs a new idempotent statement added there by hand.
 
 ## Removed: OpenFDA integration
 

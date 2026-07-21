@@ -42,3 +42,13 @@ export async function updateDisplayName(fullName: string): Promise<User> {
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
   await apiClient.post("/api/auth/change-password", { currentPassword, newPassword });
 }
+
+export interface EmailCheckResult {
+  validFormat: boolean;
+  available: boolean | null;
+}
+
+export async function checkEmailAvailability(email: string): Promise<EmailCheckResult> {
+  const { data } = await apiClient.get<EmailCheckResult>("/api/auth/check-email", { params: { email } });
+  return data;
+}

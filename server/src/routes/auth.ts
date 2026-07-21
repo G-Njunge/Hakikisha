@@ -6,8 +6,18 @@ import { generateRefreshToken, hashToken, signAccessToken } from "../lib/tokens"
 
 const router = Router();
 
+// Practical format check, not full RFC 5322 — good enough to catch typos
+// without rejecting real-world addresses.
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const SELF_REGISTER_ROLES = ["manufacturer", "pharmacist", "consumer"] as const;
 type SelfRegisterRole = (typeof SELF_REGISTER_ROLES)[number];
+
+function normalizeEmail(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : null;
+}
 
 function isSelfRegisterRole(value: unknown): value is SelfRegisterRole {
   return typeof value === "string" && (SELF_REGISTER_ROLES as readonly string[]).includes(value);
@@ -44,17 +54,45 @@ async function issueRefreshToken(userId: string) {
   return token;
 }
 
+// Lets the registration form validate an email before submitting the whole
+// form — 400 only for genuine API misuse (missing param); a malformed or
+// already-taken email is a normal, expected answer, not an error.
+router.get("/check-email", async (req, res) => {
+  const { email } = req.query;
+  const normalizedEmail = normalizeEmail(email);
+
+  if (!normalizedEmail) {
+    res.status(400).json({ error: "email is required" });
+    return;
+  }
+
+  if (!EMAIL_PATTERN.test(normalizedEmail)) {
+    res.status(200).json({ validFormat: false, available: null });
+    return;
+  }
+
+  const { rows } = await pool.query("SELECT 1 FROM users WHERE email = $1", [normalizedEmail]);
+
+  res.status(200).json({ validFormat: true, available: rows.length === 0 });
+});
+
 router.post("/register", async (req, res) => {
   const { email, password, fullName, country, role } = req.body ?? {};
+  const normalizedEmail = normalizeEmail(email);
 
   if (
-    typeof email !== "string" ||
     typeof password !== "string" ||
     typeof fullName !== "string" ||
     typeof country !== "string" ||
-    country.trim().length === 0
+    country.trim().length === 0 ||
+    !normalizedEmail
   ) {
     res.status(400).json({ error: "email, password, fullName, and country are required" });
+    return;
+  }
+
+  if (!EMAIL_PATTERN.test(normalizedEmail)) {
+    res.status(400).json({ error: "A valid email address is required" });
     return;
   }
 
@@ -65,7 +103,7 @@ router.post("/register", async (req, res) => {
 
   const resolvedRole: SelfRegisterRole = isSelfRegisterRole(role) ? role : "consumer";
 
-  const existing = await pool.query("SELECT id FROM users WHERE email = $1", [email]);
+  const existing = await pool.query("SELECT id FROM users WHERE email = $1", [normalizedEmail]);
   if (existing.rows.length > 0) {
     res.status(409).json({ error: "Email already registered" });
     return;
@@ -77,7 +115,7 @@ router.post("/register", async (req, res) => {
     `INSERT INTO users (email, password_hash, full_name, country, role)
      VALUES ($1, $2, $3, $4, $5)
      RETURNING id, email, full_name, country, role, is_verified, created_at`,
-    [email, passwordHash, fullName, country, resolvedRole]
+    [normalizedEmail, passwordHash, fullName, country, resolvedRole]
   );
 
   res.status(201).json({ user: toUserResponse(rows[0]) });
@@ -85,15 +123,16 @@ router.post("/register", async (req, res) => {
 
 router.post("/login", async (req, res) => {
   const { email, password } = req.body ?? {};
+  const normalizedEmail = normalizeEmail(email);
 
-  if (typeof email !== "string" || typeof password !== "string") {
+  if (!normalizedEmail || typeof password !== "string") {
     res.status(400).json({ error: "email and password are required" });
     return;
   }
 
   const { rows } = await pool.query<UserRow & { password_hash: string }>(
     "SELECT id, email, password_hash, full_name, country, role, is_verified, created_at FROM users WHERE email = $1",
-    [email]
+    [normalizedEmail]
   );
   const user = rows[0];
 

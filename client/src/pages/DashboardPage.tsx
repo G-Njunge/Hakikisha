@@ -55,7 +55,7 @@ function reportStatusBadgeClass(status: ReportStatus): string {
 }
 
 export default function DashboardPage() {
-  const { user, isLoading: isAuthLoading, logout, updateDisplayName } = useAuth();
+  const { user, logout, updateDisplayName } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("scans");
 
@@ -155,28 +155,10 @@ export default function DashboardPage() {
     }
   }
 
-  if (isAuthLoading) {
-    return (
-      <main className="page-shell">
-        <section className="page-card">
-          <p className="page-status">Loading...</p>
-        </section>
-      </main>
-    );
-  }
-
+  // ProtectedRoute already redirects to /login before this renders when
+  // logged out; this is just a type-narrowing guard for the render below.
   if (!user) {
-    return (
-      <main className="page-shell">
-        <section className="page-card">
-          <h1 className="page-title">Dashboard</h1>
-          <p className="page-status">You need to be logged in to view your dashboard.</p>
-          <p className="page-link-row">
-            <Link to="/login">Login</Link> or <Link to="/register">Register</Link>
-          </p>
-        </section>
-      </main>
-    );
+    return null;
   }
 
   return (

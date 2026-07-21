@@ -3,8 +3,8 @@ import type { ChangeEvent, FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { isAxiosError } from "axios";
 import { Html5Qrcode } from "html5-qrcode";
-import { getMedicineVerificationProfile, getNearbyPharmacies, scanBarcode } from "../api/medicines";
-import type { MedicineVerificationProfile, NearbyPharmacy, ScanResult } from "../types/medicine";
+import { getMedicineVerificationProfile, getNearbyPharmacies, scanBarcode, searchMedicines } from "../api/medicines";
+import type { MedicineSearchResult, MedicineVerificationProfile, NearbyPharmacy, ScanResult } from "../types/medicine";
 
 const BARCODE_PATTERN = /^\d{8,13}$/;
 
@@ -46,6 +46,10 @@ export default function BarcodeScanPage() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [manualBarcode, setManualBarcode] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<MedicineSearchResult | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -113,6 +117,9 @@ export default function BarcodeScanPage() {
     setScanResult(null);
     setScanError(null);
     setManualBarcode("");
+    setSearchQuery("");
+    setSearchResults(null);
+    setSearchError(null);
     setIsCameraActive(false);
     setCameraError(null);
     setFileScanError(null);
@@ -170,6 +177,33 @@ export default function BarcodeScanPage() {
   function handleManualSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     submitBarcode(manualBarcode);
+  }
+
+  async function runMedicineSearch(query: string, targetPage = 1) {
+    if (!query.trim()) {
+      setSearchError("Please enter a medicine name.");
+      setSearchResults(null);
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchError(null);
+
+    try {
+      const data = await searchMedicines(query.trim(), targetPage);
+      setSearchResults(data);
+    } catch (err) {
+      console.error("Medicine search failed", err);
+      setSearchError("Unable to search right now. Please try again.");
+      setSearchResults(null);
+    } finally {
+      setIsSearching(false);
+    }
+  }
+
+  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    runMedicineSearch(searchQuery);
   }
 
   function toggleCamera() {
@@ -308,6 +342,41 @@ export default function BarcodeScanPage() {
               </label>
               {/* Kept mounted (hidden) so the file-scan Html5Qrcode instance always has an element to bind to. */}
               <div id={FILE_SCAN_ELEMENT_ID} style={{ display: "none" }} />
+            </div>
+
+            <div className="scan-fallback">
+              <p className="page-status">Still stuck? Search for the medicine by name instead.</p>
+              <form className="barcode-form" onSubmit={handleSearchSubmit}>
+                <input
+                  className="barcode-input"
+                  type="text"
+                  placeholder="e.g. Panadol"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                />
+                <button type="submit" disabled={isSearching}>
+                  {isSearching ? "Searching..." : "Search"}
+                </button>
+              </form>
+              {searchError && <p className="page-status error">{searchError}</p>}
+              {searchResults && searchResults.results.length === 0 && (
+                <p className="page-status">No medicines matched that search.</p>
+              )}
+              {searchResults && searchResults.results.length > 0 && (
+                <ul className="result-list">
+                  {searchResults.results.map((medicine) => (
+                    <li key={medicine.id}>
+                      <Link to={`/medicines/${medicine.id}`} className="search-result-card">
+                        <div className="result-top">
+                          <span className="result-name">{medicine.name}</span>
+                        </div>
+                        <div className="result-meta">Manufacturer: {medicine.manufacturer}</div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Link to="/search">Open full search page</Link>
             </div>
 
             {fileScanError && <p className="page-status error">{fileScanError}</p>}

@@ -1,6 +1,6 @@
 import axios from "axios";
 import type { AxiosError, InternalAxiosRequestConfig } from "axios";
-import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "./tokenStorage";
+import { SESSION_EXPIRED_EVENT, clearTokens, getAccessToken, getRefreshToken, setTokens } from "./tokenStorage";
 
 const baseURL = import.meta.env.VITE_API_URL ?? "http://localhost:5000";
 
@@ -93,6 +93,7 @@ apiClient.interceptors.response.use(
       return apiClient(originalRequest);
     } catch (refreshError) {
       clearTokens();
+      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
       return Promise.reject(refreshError);
     }
   }

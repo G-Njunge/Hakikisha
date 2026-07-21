@@ -2,9 +2,12 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { checkEmailAvailability } from "../api/auth";
 import type { SelfRegisterRole } from "../types/auth";
 
 const ROLES: SelfRegisterRole[] = ["consumer", "pharmacist", "manufacturer"];
+
+type EmailCheckStatus = "idle" | "checking" | "ok" | "invalid" | "taken" | "error";
 
 export default function RegisterPage() {
   const { register } = useAuth();
@@ -18,9 +21,43 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [emailCheckStatus, setEmailCheckStatus] = useState<EmailCheckStatus>("idle");
+
+  async function handleEmailBlur() {
+    if (!email.trim()) {
+      setEmailCheckStatus("idle");
+      return;
+    }
+
+    setEmailCheckStatus("checking");
+    try {
+      const result = await checkEmailAvailability(email.trim());
+      if (!result.validFormat) {
+        setEmailCheckStatus("invalid");
+      } else if (result.available === false) {
+        setEmailCheckStatus("taken");
+      } else {
+        setEmailCheckStatus("ok");
+      }
+    } catch (err) {
+      console.error("Failed to check email", err);
+      setEmailCheckStatus("error");
+    }
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (emailCheckStatus === "invalid") {
+      setError("That doesn't look like a valid email address.");
+      return;
+    }
+    if (emailCheckStatus === "taken") {
+      setError("That email is already registered.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -59,9 +96,16 @@ export default function RegisterPage() {
             id="email"
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              setEmailCheckStatus("idle");
+            }}
+            onBlur={handleEmailBlur}
             required
           />
+          {emailCheckStatus === "checking" && <p>Checking email...</p>}
+          {emailCheckStatus === "invalid" && <p>That doesn't look like a valid email address.</p>}
+          {emailCheckStatus === "taken" && <p>That email is already registered.</p>}
         </div>
 
         <div>

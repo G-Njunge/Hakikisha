@@ -1,11 +1,17 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+
+interface LocationState {
+  from?: string;
+}
 
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = (location.state as LocationState | null)?.from ?? "/";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,7 +25,7 @@ export default function LoginPage() {
 
     try {
       await login({ email, password });
-      navigate("/");
+      navigate(from, { replace: true });
     } catch (err) {
       const message =
         (err as { response?: { data?: { error?: string } } }).response?.data?.error ??

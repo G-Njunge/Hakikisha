@@ -25,6 +25,9 @@ export default function HomePage() {
         <p>
           <Link to="/barcode">Scan barcode</Link>
         </p>
+        <p>
+          <Link to="/search">Search medicines</Link>
+        </p>
       </div>
     );
   }
@@ -39,6 +42,9 @@ export default function HomePage() {
       <p>Country: {user.country}</p>
       <p>
         <Link to="/barcode">Scan barcode</Link>
+      </p>
+      <p>
+        <Link to="/search">Search medicines</Link>
       </p>
       <p>
         <Link to="/report">Report counterfeit medicine</Link>
