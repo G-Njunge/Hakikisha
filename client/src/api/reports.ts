@@ -5,6 +5,7 @@ export interface CreateReportInput {
   scanId?: string;
   productName?: string;
   description: string;
+  country: string;
   purchaseLocation?: string;
   photoUrl?: string;
 }

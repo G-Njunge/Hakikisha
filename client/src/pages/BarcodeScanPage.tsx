@@ -8,6 +8,14 @@ import type { MedicineSearchResult, MedicineVerificationProfile, NearbyPharmacy,
 
 const BARCODE_PATTERN = /^\d{8,13}$/;
 
+// Laptops/desktops almost never have a rear-facing camera, so the app falls
+// back to a fixed webcam — holding a package steady in front of a screen is
+// inherently slower/more awkward than a handheld phone camera, worth calling
+// out explicitly rather than letting it look like the scanner is broken.
+function isLikelyMobileDevice(): boolean {
+  return /Android|iPhone|iPad|iPod|Mobile|webOS/i.test(navigator.userAgent);
+}
+
 type Step = "scan" | "identified" | "photos" | "package" | "safety" | "pharmacy";
 
 const STEPS: Array<{ key: Step; label: string }> = [
@@ -54,6 +62,7 @@ export default function BarcodeScanPage() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  const [isMobileDevice] = useState(() => isLikelyMobileDevice());
 
   const [isFileScanning, setIsFileScanning] = useState(false);
   const [fileScanError, setFileScanError] = useState<string | null>(null);
@@ -79,7 +88,12 @@ export default function BarcodeScanPage() {
     html5QrCode
       .start(
         { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 150 } },
+        // qrbox must be square (or close to it) for QR codes — the previous
+        // 250x150 wide-rectangle box clipped the top/bottom off any QR code
+        // sized to fill its width, causing repeated failed scans until the
+        // user happened to reposition it just right. fps bumped slightly for
+        // snappier detection on capable devices.
+        { fps: 15, qrbox: { width: 250, height: 250 } },
         (decodedText) => {
           if (decoded) return;
           decoded = true;
@@ -110,6 +124,19 @@ export default function BarcodeScanPage() {
         .catch(() => {});
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCameraActive]);
+
+  // Nudges the user toward the manual-entry/upload/search fallbacks if the
+  // camera hasn't found a code within a few seconds, instead of leaving them
+  // staring at a viewfinder with no feedback on what to do next.
+  const [showScanningTip, setShowScanningTip] = useState(false);
+
+  useEffect(() => {
+    setShowScanningTip(false);
+    if (!isCameraActive) return;
+
+    const timer = setTimeout(() => setShowScanningTip(true), 7000);
+    return () => clearTimeout(timer);
   }, [isCameraActive]);
 
   function resetFlow() {
@@ -305,9 +332,28 @@ export default function BarcodeScanPage() {
             </div>
 
             {isCameraActive && (
-              <div className="camera-viewfinder">
-                <div id={CAMERA_ELEMENT_ID} />
-              </div>
+              <>
+                <div className="camera-viewfinder">
+                  <div id={CAMERA_ELEMENT_ID} />
+                </div>
+                <p className="page-status scan-tip">
+                  Hold your phone steady, about 10–15cm from the package. Center the QR code in
+                  the box, with even lighting and no glare.
+                </p>
+                {!isMobileDevice && (
+                  <p className="page-status scan-tip warn">
+                    Using a laptop or desktop webcam? Scanning may take noticeably longer than on
+                    a phone — try holding the package steady close to the camera, or use manual
+                    entry, photo upload, or search below instead.
+                  </p>
+                )}
+                {showScanningTip && (
+                  <p className="page-status scan-tip warn">
+                    Still not scanning? Try moving a little closer or further away, or use manual
+                    entry, photo upload, or search below instead.
+                  </p>
+                )}
+              </>
             )}
             {cameraError && <p className="page-status error">{cameraError}</p>}
 

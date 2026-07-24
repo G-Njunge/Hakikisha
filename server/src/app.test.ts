@@ -11,6 +11,15 @@ vi.mock("./db/pool", () => ({
   },
 }));
 
+// Registration now sends a verification email as a side effect — without
+// this mock, the test makes a real network call to Resend, which is slow
+// enough to blow past the test timeout (and shouldn't be hitting a real
+// third-party API from a test at all).
+vi.mock("./lib/email", () => ({
+  sendVerificationEmail: vi.fn().mockResolvedValue(undefined),
+  sendReportAlertEmail: vi.fn().mockResolvedValue(undefined),
+}));
+
 import app from "./app";
 
 describe("GET /health", () => {

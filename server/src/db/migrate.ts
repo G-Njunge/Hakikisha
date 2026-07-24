@@ -131,6 +131,24 @@ async function main() {
   `);
   console.log(`OK    backfill scans.barcode from matched medicines (${backfill.rowCount} rows)`);
 
+  // --- reports: country (routes the report-alert email) ---
+  await run(
+    "ALTER TABLE reports ADD COLUMN country",
+    `ALTER TABLE reports ADD COLUMN IF NOT EXISTS country VARCHAR(100)`
+  );
+
+  // --- health_authorities (one row per country, keyed by country) ---
+  await run(
+    "CREATE TABLE health_authorities",
+    `CREATE TABLE IF NOT EXISTS health_authorities (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        country VARCHAR(100) NOT NULL UNIQUE,
+        authority_name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )`
+  );
+
   // --- medicines.barcode: widen 13-digit-only check to 8-13 digits ---
   // (lets a scanned/uploaded QR code that decodes to fewer than 13 digits be
   // stored as-is, matching the API's own /^\d{8,13}$/ validation). This is a

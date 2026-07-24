@@ -1,6 +1,7 @@
 import { Router } from "express";
 import pool from "../db/pool";
 import authenticate, { requireAdmin } from "../middleware/auth";
+import { sendReportAlertEmail } from "../lib/email";
 
 const router = Router();
 
@@ -27,6 +28,7 @@ interface ReportRow {
   reported_by: string | null;
   product_name: string | null;
   description: string;
+  country: string | null;
   purchase_location: string | null;
   photo_url: string | null;
   status: string;
@@ -48,6 +50,7 @@ function toReportDetail(row: ReportRow) {
     scanId: row.scan_id,
     productName: row.product_name,
     description: row.description,
+    country: row.country,
     purchaseLocation: row.purchase_location,
     photoUrl: row.photo_url,
     status: row.status,
@@ -65,6 +68,7 @@ function toReportSummary(row: ReportRow) {
     scanId: row.scan_id,
     productName: row.product_name,
     description: row.description,
+    country: row.country,
     purchaseLocation: row.purchase_location,
     hasPhoto: row.photo_url !== null,
     status: row.status,
@@ -86,6 +90,7 @@ function toReportAdminResponse(row: ReportAdminRow) {
     productName: row.product_name,
     medicineName: row.scan_medicine_name,
     description: row.description,
+    country: row.country,
     purchaseLocation: row.purchase_location,
     photoUrl: row.photo_url,
     status: row.status,
@@ -99,10 +104,15 @@ function toReportAdminResponse(row: ReportAdminRow) {
 }
 
 router.post("/", authenticate, async (req, res) => {
-  const { scanId, productName, description, purchaseLocation, photoUrl } = req.body ?? {};
+  const { scanId, productName, description, country, purchaseLocation, photoUrl } = req.body ?? {};
 
   if (typeof description !== "string" || description.trim().length === 0) {
     res.status(400).json({ error: "description is required" });
+    return;
+  }
+
+  if (typeof country !== "string" || country.trim().length === 0) {
+    res.status(400).json({ error: "country is required" });
     return;
   }
 
@@ -135,28 +145,61 @@ router.post("/", authenticate, async (req, res) => {
     }
   }
 
+  const normalizedCountry = country.trim();
+
+  let row: ReportRow;
   try {
     const { rows } = await pool.query<ReportRow>(
-      `INSERT INTO reports (scan_id, reported_by, product_name, description, purchase_location, photo_url, status)
-       VALUES ($1, $2, $3, $4, $5, $6, 'pending')
+      `INSERT INTO reports (scan_id, reported_by, product_name, description, country, purchase_location, photo_url, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
        RETURNING *`,
       [
         hasScanId ? scanId : null,
         req.user?.sub ?? null,
         hasProductName ? productName.trim() : null,
         description.trim(),
+        normalizedCountry,
         purchaseLocation?.trim() || null,
         photoUrl ?? null,
       ]
     );
-
-    res.status(201).json({ report: toReportDetail(rows[0]) });
+    row = rows[0];
   } catch (err) {
     if ((err as { code?: string }).code === "23503") {
       res.status(400).json({ error: "scanId does not reference an existing scan" });
       return;
     }
     throw err;
+  }
+
+  res.status(201).json({ report: toReportDetail(row) });
+
+  // Alerting the health authority is best-effort — it must never affect the
+  // response the reporter already received above, so failures (no HA on file
+  // for this country, Resend rejecting the send, etc.) are only logged.
+  try {
+    const { rows: haRows } = await pool.query<{ email: string }>(
+      "SELECT email FROM health_authorities WHERE country = $1",
+      [normalizedCountry]
+    );
+
+    if (haRows.length === 0) {
+      console.warn(`No health authority on file for country "${normalizedCountry}" — report ${row.id} not alerted`);
+      return;
+    }
+
+    await sendReportAlertEmail(haRows[0].email, {
+      productName: row.product_name ?? "Unknown product",
+      country: normalizedCountry,
+      description: row.description,
+      dateFiled: new Date(row.created_at).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      }),
+    });
+  } catch (err) {
+    console.error(`Failed to send report alert email for report ${row.id}`, err);
   }
 });
 

@@ -19,6 +19,12 @@ interface LocationState {
   productName?: string;
 }
 
+// Must match server/src/db/seed.ts's health_authorities rows — a country
+// picked here that has no matching row just means the alert email is
+// skipped (logged server-side), not a hard error, but keeping this list in
+// sync avoids that silently happening for every submission.
+const HEALTH_AUTHORITY_COUNTRIES = ["Nigeria", "Kenya", "South Africa", "Rwanda", "Ghana"] as const;
+
 const MAX_PHOTO_BYTES = 4 * 1024 * 1024; // 4MB raw file, comfortably under the server's base64 cap
 
 function StepIndicator({ current }: { current: Step }) {
@@ -58,6 +64,12 @@ export default function ReportCounterfeitPage() {
   const [scanId] = useState<string | undefined>(state?.scanId);
   const [productName, setProductName] = useState(state?.productName ?? "");
 
+  const [country, setCountry] = useState(() => {
+    const accountCountry = user?.country;
+    return accountCountry && (HEALTH_AUTHORITY_COUNTRIES as readonly string[]).includes(accountCountry)
+      ? accountCountry
+      : "";
+  });
   const [purchaseLocation, setPurchaseLocation] = useState("");
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -116,6 +128,7 @@ export default function ReportCounterfeitPage() {
         scanId,
         productName: productName.trim() || undefined,
         description: description.trim(),
+        country,
         purchaseLocation: purchaseLocation.trim() || undefined,
         photoUrl: photoDataUrl ?? undefined,
       });
@@ -201,6 +214,22 @@ export default function ReportCounterfeitPage() {
 
         {step === "location" && (
           <form onSubmit={handleLocationNext}>
+            <select
+              className="barcode-input"
+              value={country}
+              onChange={(event) => setCountry(event.target.value)}
+              required
+            >
+              <option value="" disabled>
+                Select country where this was found
+              </option>
+              {HEALTH_AUTHORITY_COUNTRIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+
             <input
               className="barcode-input"
               type="text"
@@ -230,7 +259,9 @@ export default function ReportCounterfeitPage() {
               <button type="button" onClick={() => setStep("product")}>
                 Back
               </button>{" "}
-              <button type="submit">Next</button>
+              <button type="submit" disabled={!country}>
+                Next
+              </button>
             </p>
           </form>
         )}

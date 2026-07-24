@@ -25,3 +25,27 @@ export function generateRefreshToken() {
 export function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
+
+const EMAIL_VERIFICATION_TTL = "24h";
+
+// Deliberately stateless (unlike refresh tokens) — verifying an email is
+// idempotent, so there's nothing to gain from tracking single-use/revocation
+// in a database table. A signed, expiring JWT is sufficient and needs no
+// schema of its own.
+export function signEmailVerificationToken(userId: string): string {
+  return jwt.sign({ sub: userId, purpose: "email-verify" }, process.env.JWT_SECRET as string, {
+    expiresIn: EMAIL_VERIFICATION_TTL,
+  });
+}
+
+export function verifyEmailVerificationToken(token: string): string | null {
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET as string);
+    if (typeof payload === "string" || payload.purpose !== "email-verify" || typeof payload.sub !== "string") {
+      return null;
+    }
+    return payload.sub;
+  } catch {
+    return null;
+  }
+}

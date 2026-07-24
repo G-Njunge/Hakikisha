@@ -5,6 +5,7 @@ export interface ReportDetail {
   scanId: string | null;
   productName: string | null;
   description: string;
+  country: string | null;
   purchaseLocation: string | null;
   photoUrl: string | null;
   status: ReportStatus;
@@ -18,6 +19,7 @@ export interface ReportSummary {
   scanId: string | null;
   productName: string | null;
   description: string;
+  country: string | null;
   purchaseLocation: string | null;
   hasPhoto: boolean;
   status: ReportStatus;
@@ -34,6 +36,7 @@ export interface ReportAdminRow {
   productName: string | null;
   medicineName: string | null;
   description: string;
+  country: string | null;
   purchaseLocation: string | null;
   photoUrl: string | null;
   status: ReportStatus;

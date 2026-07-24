@@ -2,7 +2,14 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import pool from "../db/pool";
 import authenticate from "../middleware/auth";
-import { generateRefreshToken, hashToken, signAccessToken } from "../lib/tokens";
+import {
+  generateRefreshToken,
+  hashToken,
+  signAccessToken,
+  signEmailVerificationToken,
+  verifyEmailVerificationToken,
+} from "../lib/tokens";
+import { sendVerificationEmail } from "../lib/email";
 
 const router = Router();
 
@@ -117,8 +124,84 @@ router.post("/register", async (req, res) => {
      RETURNING id, email, full_name, country, role, is_verified, created_at`,
     [normalizedEmail, passwordHash, fullName, country, resolvedRole]
   );
+  const user = rows[0];
 
-  res.status(201).json({ user: toUserResponse(rows[0]) });
+  // Verification email failing to send shouldn't fail account creation —
+  // the account is fully usable unverified; log it and move on.
+  try {
+    const verificationToken = signEmailVerificationToken(user.id);
+    await sendVerificationEmail(user.email, user.full_name, verificationToken);
+  } catch (err) {
+    console.error("Failed to send verification email", err);
+  }
+
+  res.status(201).json({ user: toUserResponse(user) });
+});
+
+// Renders a small self-contained HTML page rather than JSON or a redirect —
+// this is a link clicked directly from an email client, not an API call a
+// frontend is driving, so there's no SPA involved on either end.
+function verifyEmailPage(title: string, message: string): string {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>${title}</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f9fafb; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+      .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 32px; max-width: 420px; text-align: center; }
+      h1 { font-size: 20px; color: #111827; margin: 0 0 8px; }
+      p { font-size: 14px; color: #374151; line-height: 22px; margin: 0; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>${title}</h1>
+      <p>${message}</p>
+    </div>
+  </body>
+</html>`;
+}
+
+router.get("/verify-email", async (req, res) => {
+  const { token } = req.query;
+
+  if (typeof token !== "string" || token.length === 0) {
+    res.status(400).type("html").send(verifyEmailPage("Invalid link", "This verification link is missing its token."));
+    return;
+  }
+
+  const userId = verifyEmailVerificationToken(token);
+  if (!userId) {
+    res
+      .status(400)
+      .type("html")
+      .send(
+        verifyEmailPage(
+          "Link expired or invalid",
+          "This verification link is invalid or has expired. Please request a new one."
+        )
+      );
+    return;
+  }
+
+  const { rows } = await pool.query<{ id: string }>(
+    "UPDATE users SET is_verified = true, updated_at = now() WHERE id = $1 RETURNING id",
+    [userId]
+  );
+
+  if (rows.length === 0) {
+    res
+      .status(404)
+      .type("html")
+      .send(verifyEmailPage("Account not found", "We couldn't find an account matching this verification link."));
+    return;
+  }
+
+  res
+    .status(200)
+    .type("html")
+    .send(verifyEmailPage("Email verified", "Your email address has been verified. You can now close this page and log in to Hakikisha."));
 });
 
 router.post("/login", async (req, res) => {

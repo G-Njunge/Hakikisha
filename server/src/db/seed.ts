@@ -118,6 +118,22 @@ const pharmacies: PharmacySeed[] = [
   { name: "Dis-Chem Pharmacy - Rosebank", address: "The Zone, Rosebank, Johannesburg, South Africa", latitude: -26.1467, longitude: 28.0436, phone: "+27-11-4471234" },
 ];
 
+interface HealthAuthoritySeed {
+  country: string;
+  authorityName: string;
+  email: string;
+}
+
+// Demo addresses only — hakikisha-demo.com isn't a real registered domain, so
+// these are for exercising the report-alert flow, not actual delivery.
+const healthAuthorities: HealthAuthoritySeed[] = [
+  { country: "Nigeria", authorityName: "NAFDAC", email: "nafdac@hakikisha-demo.com" },
+  { country: "Kenya", authorityName: "KEBS", email: "kebs@hakikisha-demo.com" },
+  { country: "South Africa", authorityName: "SAHPRA", email: "sahpra@hakikisha-demo.com" },
+  { country: "Rwanda", authorityName: "Rwanda FDA", email: "rwandafda@hakikisha-demo.com" },
+  { country: "Ghana", authorityName: "FDA Ghana", email: "fdaghana@hakikisha-demo.com" },
+];
+
 function placeholderPhotoUrl(medicineName: string, angle: "front" | "back"): string {
   const label = encodeURIComponent(`${medicineName} - ${angle}`);
   return `https://placehold.co/400x600?text=${label}`;
@@ -203,8 +219,21 @@ async function seed() {
       );
     }
 
+    for (const ha of healthAuthorities) {
+      await pool.query(
+        `INSERT INTO health_authorities (country, authority_name, email)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (country) DO UPDATE SET
+           authority_name = EXCLUDED.authority_name,
+           email = EXCLUDED.email`,
+        [ha.country, ha.authorityName, ha.email]
+      );
+    }
+
     const { rows } = await pool.query<{ count: string }>("SELECT count(*) FROM medicines");
-    console.log(`Seeded ${medicines.length} medicines (with photos + checklists) and ${pharmacies.length} pharmacies. Table now has ${rows[0].count} rows.`);
+    console.log(
+      `Seeded ${medicines.length} medicines (with photos + checklists), ${pharmacies.length} pharmacies, and ${healthAuthorities.length} health authorities. Table now has ${rows[0].count} rows.`
+    );
   } finally {
     await pool.end();
   }

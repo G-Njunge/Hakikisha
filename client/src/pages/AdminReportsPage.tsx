@@ -115,6 +115,7 @@ export default function AdminReportsPage() {
                   <th style={{ textAlign: "left", padding: "8px" }}>Product</th>
                   <th style={{ textAlign: "left", padding: "8px" }}>Reporter</th>
                   <th style={{ textAlign: "left", padding: "8px" }}>Description</th>
+                  <th style={{ textAlign: "left", padding: "8px" }}>Country</th>
                   <th style={{ textAlign: "left", padding: "8px" }}>Location</th>
                   <th style={{ textAlign: "left", padding: "8px" }}>Photo</th>
                   <th style={{ textAlign: "left", padding: "8px" }}>Status</th>
@@ -134,6 +135,7 @@ export default function AdminReportsPage() {
                         {report.reporter?.fullName ?? report.reporter?.email ?? "Unknown"}
                       </td>
                       <td style={{ padding: "8px", maxWidth: 280 }}>{report.description}</td>
+                      <td style={{ padding: "8px" }}>{report.country ?? "Not listed"}</td>
                       <td style={{ padding: "8px" }}>{report.purchaseLocation ?? "Not listed"}</td>
                       <td style={{ padding: "8px" }}>
                         {report.photoUrl ? (

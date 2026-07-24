@@ -79,6 +79,10 @@ CREATE TABLE reports (
     reported_by UUID REFERENCES users(id) ON DELETE SET NULL,
     product_name VARCHAR(255),
     description TEXT NOT NULL,
+    -- Where the counterfeit itself was found/reported — not necessarily the
+    -- reporter's own account country (e.g. a traveler) — and what routes the
+    -- alert email to the right health_authorities row.
+    country VARCHAR(100),
     purchase_location VARCHAR(255),
     -- Interim storage as a base64 data URL; swap for a real object-storage URL
     -- (Railway volume / S3 / etc.) before this handles real traffic.
@@ -126,6 +130,17 @@ CREATE TABLE pharmacies (
     phone VARCHAR(50),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (name, address)
+);
+
+-- One national medicines regulator per country, for routing the counterfeit
+-- report alert email. Deliberately simple (one row per country) — a country
+-- with multiple regional authorities isn't modeled here.
+CREATE TABLE health_authorities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    country VARCHAR(100) NOT NULL UNIQUE,
+    authority_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE refresh_tokens (
