@@ -143,6 +143,17 @@ CREATE TABLE health_authorities (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Many-to-many: which pharmacies stock which medicines. Used to flag/prioritize
+-- "confirmed in stock" results on the nearby-pharmacy step rather than hard-
+-- filtering (a hard filter would return zero results in areas with sparse
+-- seed data, which defeats the point of a pharmacy finder).
+CREATE TABLE pharmacy_medicine_stock (
+    pharmacy_id UUID NOT NULL REFERENCES pharmacies(id) ON DELETE CASCADE,
+    medicine_id UUID NOT NULL REFERENCES medicines(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (pharmacy_id, medicine_id)
+);
+
 CREATE TABLE refresh_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

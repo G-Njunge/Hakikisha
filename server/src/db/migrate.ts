@@ -149,6 +149,17 @@ async function main() {
     )`
   );
 
+  // --- pharmacy_medicine_stock (nearby-pharmacy "confirmed in stock" flag) ---
+  await run(
+    "CREATE TABLE pharmacy_medicine_stock",
+    `CREATE TABLE IF NOT EXISTS pharmacy_medicine_stock (
+        pharmacy_id UUID NOT NULL REFERENCES pharmacies(id) ON DELETE CASCADE,
+        medicine_id UUID NOT NULL REFERENCES medicines(id) ON DELETE CASCADE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        PRIMARY KEY (pharmacy_id, medicine_id)
+    )`
+  );
+
   // --- medicines.barcode: widen 13-digit-only check to 8-13 digits ---
   // (lets a scanned/uploaded QR code that decodes to fewer than 13 digits be
   // stored as-is, matching the API's own /^\d{8,13}$/ validation). This is a

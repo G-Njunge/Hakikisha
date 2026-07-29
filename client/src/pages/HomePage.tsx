@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import LandingPage from "./LandingPage";
 
 export default function HomePage() {
   const { user, isLoading, logout } = useAuth();
@@ -15,21 +16,7 @@ export default function HomePage() {
   }
 
   if (!user) {
-    return (
-      <div>
-        <h1>Hakikisha</h1>
-        <p>You are not logged in.</p>
-        <p>
-          <Link to="/login">Login</Link> or <Link to="/register">Register</Link>
-        </p>
-        <p>
-          <Link to="/barcode">Scan barcode</Link>
-        </p>
-        <p>
-          <Link to="/search">Search medicines</Link>
-        </p>
-      </div>
-    );
+    return <LandingPage />;
   }
 
   return (

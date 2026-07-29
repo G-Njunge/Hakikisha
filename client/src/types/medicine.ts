@@ -54,6 +54,9 @@ export interface NearbyPharmacy {
   longitude: number;
   phone: string | null;
   distanceKm: number;
+  // null when no medicineId was passed to the nearby-pharmacies request —
+  // otherwise a flag (not a filter) for whether stock is on file, sorted first.
+  stocksMedicine: boolean | null;
 }
 
 export type ScanStatus = "VERIFIED" | "UNVERIFIED";
@@ -68,5 +71,6 @@ export interface ScanResult {
     approvalStatus: ApprovalStatus;
   } | null;
   batchNumber: string | null;
+  expiryDate: string | null;
   message?: string;
 }

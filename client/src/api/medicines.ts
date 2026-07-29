@@ -35,9 +35,9 @@ export async function getMedicineVerificationProfile(id: string): Promise<Medici
   return data;
 }
 
-export async function getNearbyPharmacies(lat: number, lng: number): Promise<NearbyPharmacy[]> {
+export async function getNearbyPharmacies(lat: number, lng: number, medicineId?: string): Promise<NearbyPharmacy[]> {
   const { data } = await apiClient.get<{ results: NearbyPharmacy[] }>("/api/pharmacies/nearby", {
-    params: { lat, lng },
+    params: { lat, lng, medicineId },
   });
   return data.results;
 }

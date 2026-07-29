@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getMedicineById } from "../api/medicines";
-import type { Medicine } from "../types/medicine";
+import { getMedicineById, getNearbyPharmacies } from "../api/medicines";
+import type { Medicine, NearbyPharmacy } from "../types/medicine";
+import PharmacyMap from "../components/PharmacyMap";
 
 type FetchState =
   | { status: "loading"; forId: string }
@@ -31,6 +32,11 @@ export default function MedicineDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [state, setState] = useState<FetchState>({ status: "loading", forId: "" });
 
+  const [pharmacies, setPharmacies] = useState<NearbyPharmacy[] | null>(null);
+  const [pharmacyStatus, setPharmacyStatus] = useState<"idle" | "loading" | "error" | "success">("idle");
+  const [pharmacyError, setPharmacyError] = useState<string | null>(null);
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+
   useEffect(() => {
     if (!id) {
       return;
@@ -56,6 +62,38 @@ export default function MedicineDetailPage() {
       cancelled = true;
     };
   }, [id]);
+
+  function findNearbyPharmacies() {
+    if (!id) return;
+
+    if (!("geolocation" in navigator)) {
+      setPharmacyStatus("error");
+      setPharmacyError("Location is not available in this browser.");
+      return;
+    }
+
+    setPharmacyStatus("loading");
+    setPharmacyError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const results = await getNearbyPharmacies(position.coords.latitude, position.coords.longitude, id);
+          setPharmacies(results);
+          setUserCoords({ lat: position.coords.latitude, lng: position.coords.longitude });
+          setPharmacyStatus("success");
+        } catch (err) {
+          console.error("Failed to fetch nearby pharmacies", err);
+          setPharmacyStatus("error");
+          setPharmacyError("Unable to fetch nearby pharmacies.");
+        }
+      },
+      () => {
+        setPharmacyStatus("error");
+        setPharmacyError("Location permission was denied. Enable it to find nearby pharmacies.");
+      }
+    );
+  }
 
   const effective: FetchState = state.forId === id ? state : { status: "loading", forId: id ?? "" };
 
@@ -114,6 +152,45 @@ export default function MedicineDetailPage() {
               <span className="detail-value">{item.value}</span>
             </div>
           ))}
+        </div>
+
+        <div className="barcode-result">
+          <h2>Nearby pharmacies</h2>
+          {pharmacyStatus === "idle" && (
+            <button type="button" onClick={findNearbyPharmacies}>
+              Find pharmacies stocking this medicine
+            </button>
+          )}
+          {pharmacyStatus === "loading" && <p className="page-status">Finding nearby pharmacies...</p>}
+          {pharmacyStatus === "error" && (
+            <>
+              <p className="page-status error">{pharmacyError}</p>
+              <button type="button" onClick={findNearbyPharmacies}>
+                Try again
+              </button>
+            </>
+          )}
+          {pharmacyStatus === "success" && pharmacies && pharmacies.length === 0 && (
+            <p className="page-status">No pharmacies found near you.</p>
+          )}
+          {pharmacyStatus === "success" && pharmacies && pharmacies.length > 0 && (
+            <>
+              {userCoords && <PharmacyMap center={userCoords} pharmacies={pharmacies} />}
+              <ul className="result-list">
+                {pharmacies.map((pharmacy) => (
+                  <li key={pharmacy.id} className="pharmacy-card">
+                    <div className="result-top">
+                      <span className="result-name">{pharmacy.name}</span>
+                      <span>{pharmacy.distanceKm} km</span>
+                    </div>
+                    {pharmacy.stocksMedicine && <span className="stock-badge">Confirmed in stock</span>}
+                    <div className="result-meta">{pharmacy.address}</div>
+                    {pharmacy.phone && <div className="result-meta">{pharmacy.phone}</div>}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
 
         <p className="page-link-row">

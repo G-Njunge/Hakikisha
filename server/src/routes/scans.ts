@@ -10,11 +10,35 @@ interface ScanHistoryRow {
   barcode: string | null;
   result: string;
   scanned_at: string;
+  medicine_id: string | null;
   medicine_name: string | null;
 }
 
 function parseCoordinate(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+// scans.result only distinguishes authentic/expired/unknown (a batch-level
+// outcome, matching the stored enum) — but the medicine's own approval_status
+// has four distinct values, and collapsing pending/rejected/expired-approval
+// into one generic "not yet approved" message was actively misleading for two
+// of those three cases. This branches on the real value instead.
+function buildStatusMessage(isBatchExpired: boolean, approvalStatus: string): string | undefined {
+  if (isBatchExpired) {
+    return "This batch has expired.";
+  }
+  switch (approvalStatus) {
+    case "approved":
+      return undefined;
+    case "pending":
+      return "This medicine is registered but awaiting regulatory approval.";
+    case "rejected":
+      return "This medicine's registration was rejected by the regulator — treat with caution.";
+    case "expired":
+      return "This medicine's regulatory approval has expired.";
+    default:
+      return "This medicine is registered but not yet approved.";
+  }
 }
 
 router.post("/", optionalAuthenticate, async (req, res) => {
@@ -53,20 +77,20 @@ router.post("/", optionalAuthenticate, async (req, res) => {
       approvalStatus: result.medicine.approval_status,
     },
     batchNumber: result.batchNumber,
-    message: isVerified
-      ? undefined
-      : result.scanResult === "expired"
-        ? "This batch has expired."
-        : "This medicine is registered but not yet approved.",
+    expiryDate: result.expiryDate,
+    message: buildStatusMessage(result.scanResult === "expired", result.medicine.approval_status),
   });
 });
 
 router.get("/my", authenticate, async (req, res) => {
+  // Joins on the scanned barcode (not batch_record_id) so history still
+  // resolves the medicine when no batch record exists for it — batch_record_id
+  // is only ever set when a matching batch happens to exist, which most
+  // medicines in this dataset don't have.
   const { rows } = await pool.query<ScanHistoryRow>(
-    `SELECT s.id, s.barcode, s.result, s.scanned_at, m.name AS medicine_name
+    `SELECT s.id, s.barcode, s.result, s.scanned_at, m.id AS medicine_id, m.name AS medicine_name
      FROM scans s
-     LEFT JOIN batch_records br ON br.id = s.batch_record_id
-     LEFT JOIN medicines m ON m.id = br.medicine_id
+     LEFT JOIN medicines m ON m.barcode = s.barcode
      WHERE s.scanned_by = $1
      ORDER BY s.scanned_at DESC`,
     [req.user?.sub]
@@ -76,6 +100,7 @@ router.get("/my", authenticate, async (req, res) => {
     scans: rows.map((row) => ({
       id: row.id,
       barcode: row.barcode,
+      medicineId: row.medicine_id,
       medicineName: row.medicine_name,
       result: row.result,
       scannedAt: row.scanned_at,

@@ -5,6 +5,7 @@ import { isAxiosError } from "axios";
 import { Html5Qrcode } from "html5-qrcode";
 import { getMedicineVerificationProfile, getNearbyPharmacies, scanBarcode, searchMedicines } from "../api/medicines";
 import type { MedicineSearchResult, MedicineVerificationProfile, NearbyPharmacy, ScanResult } from "../types/medicine";
+import PharmacyMap from "../components/PharmacyMap";
 
 const BARCODE_PATTERN = /^\d{8,13}$/;
 
@@ -77,6 +78,7 @@ export default function BarcodeScanPage() {
   const [pharmacies, setPharmacies] = useState<NearbyPharmacy[] | null>(null);
   const [pharmacyStatus, setPharmacyStatus] = useState<"idle" | "loading" | "error" | "success">("idle");
   const [pharmacyError, setPharmacyError] = useState<string | null>(null);
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (!isCameraActive) return;
@@ -156,6 +158,7 @@ export default function BarcodeScanPage() {
     setPharmacies(null);
     setPharmacyStatus("idle");
     setPharmacyError(null);
+    setUserCoords(null);
   }
 
   async function submitBarcode(value: string) {
@@ -299,8 +302,13 @@ export default function BarcodeScanPage() {
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
-          const results = await getNearbyPharmacies(position.coords.latitude, position.coords.longitude);
+          const results = await getNearbyPharmacies(
+            position.coords.latitude,
+            position.coords.longitude,
+            scanResult?.medicine?.id
+          );
           setPharmacies(results);
+          setUserCoords({ lat: position.coords.latitude, lng: position.coords.longitude });
           setPharmacyStatus("success");
         } catch (err) {
           console.error("Failed to fetch nearby pharmacies", err);
@@ -463,6 +471,12 @@ export default function BarcodeScanPage() {
                 <span className="detail-value">{scanResult.batchNumber ?? "Not listed"}</span>
               </div>
               <div className="detail-item">
+                <span className="detail-label">Expiry date</span>
+                <span className="detail-value">
+                  {scanResult.expiryDate ? new Date(scanResult.expiryDate).toLocaleDateString() : "Not listed"}
+                </span>
+              </div>
+              <div className="detail-item">
                 <span className="detail-label">Approval status</span>
                 <span className="detail-value">{scanResult.medicine.approvalStatus}</span>
               </div>
@@ -471,6 +485,7 @@ export default function BarcodeScanPage() {
               <button type="button" onClick={goToPhotos}>
                 Continue to reference photos
               </button>{" "}
+              <Link to={`/medicines/${scanResult.medicine.id}`}>View full details</Link>{" "}
               <Link to="/report" state={{ scanId: scanResult.scanId, productName: scanResult.medicine.name }}>
                 Report this as counterfeit
               </Link>
@@ -579,18 +594,24 @@ export default function BarcodeScanPage() {
               <p className="page-status">No pharmacies found near you.</p>
             )}
             {pharmacyStatus === "success" && pharmacies && pharmacies.length > 0 && (
-              <ul className="result-list">
-                {pharmacies.map((pharmacy) => (
-                  <li key={pharmacy.id} className="pharmacy-card">
-                    <div className="result-top">
-                      <span className="result-name">{pharmacy.name}</span>
-                      <span>{pharmacy.distanceKm} km</span>
-                    </div>
-                    <div className="result-meta">{pharmacy.address}</div>
-                    {pharmacy.phone && <div className="result-meta">{pharmacy.phone}</div>}
-                  </li>
-                ))}
-              </ul>
+              <>
+                {userCoords && <PharmacyMap center={userCoords} pharmacies={pharmacies} />}
+                <ul className="result-list">
+                  {pharmacies.map((pharmacy) => (
+                    <li key={pharmacy.id} className="pharmacy-card">
+                      <div className="result-top">
+                        <span className="result-name">{pharmacy.name}</span>
+                        <span>{pharmacy.distanceKm} km</span>
+                      </div>
+                      {pharmacy.stocksMedicine && (
+                        <span className="stock-badge">Confirmed in stock</span>
+                      )}
+                      <div className="result-meta">{pharmacy.address}</div>
+                      {pharmacy.phone && <div className="result-meta">{pharmacy.phone}</div>}
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
             <p className="page-link-row">
               <button type="button" onClick={resetFlow}>

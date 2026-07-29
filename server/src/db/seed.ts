@@ -105,18 +105,79 @@ interface PharmacySeed {
   address: string;
   latitude: number;
   longitude: number;
-  phone: string;
+  phone: string | null;
+  country: string;
 }
 
 const pharmacies: PharmacySeed[] = [
-  { name: "MedPlus Pharmacy - Ikeja", address: "45 Allen Avenue, Ikeja, Lagos, Nigeria", latitude: 6.6018, longitude: 3.3515, phone: "+234-1-2716842" },
-  { name: "HealthPlus Pharmacy - Victoria Island", address: "270B Ozumba Mbadiwe Ave, Victoria Island, Lagos, Nigeria", latitude: 6.4281, longitude: 3.4219, phone: "+234-1-2703030" },
-  { name: "Alpha Pharmacy - Wuse", address: "Plot 123 Aminu Kano Crescent, Wuse 2, Abuja, Nigeria", latitude: 9.0817, longitude: 7.4875, phone: "+234-9-2345678" },
-  { name: "Goodlife Pharmacy - Westlands", address: "Sarit Centre, Westlands, Nairobi, Kenya", latitude: -1.2634, longitude: 36.8047, phone: "+254-20-4451234" },
-  { name: "Mydawa Pharmacy - CBD", address: "Kimathi Street, Nairobi, Kenya", latitude: -1.2833, longitude: 36.8236, phone: "+254-20-2224455" },
-  { name: "Clicks Pharmacy - Sandton", address: "Sandton City Mall, Sandton, Johannesburg, South Africa", latitude: -26.1076, longitude: 28.0567, phone: "+27-11-7834567" },
-  { name: "Dis-Chem Pharmacy - Rosebank", address: "The Zone, Rosebank, Johannesburg, South Africa", latitude: -26.1467, longitude: 28.0436, phone: "+27-11-4471234" },
+  { name: "MedPlus Pharmacy - Ikeja", address: "45 Allen Avenue, Ikeja, Lagos, Nigeria", latitude: 6.6018, longitude: 3.3515, phone: "+234-1-2716842", country: "Nigeria" },
+  { name: "HealthPlus Pharmacy - Victoria Island", address: "270B Ozumba Mbadiwe Ave, Victoria Island, Lagos, Nigeria", latitude: 6.4281, longitude: 3.4219, phone: "+234-1-2703030", country: "Nigeria" },
+  { name: "Alpha Pharmacy - Wuse", address: "Plot 123 Aminu Kano Crescent, Wuse 2, Abuja, Nigeria", latitude: 9.0817, longitude: 7.4875, phone: "+234-9-2345678", country: "Nigeria" },
+  { name: "Goodlife Pharmacy - Westlands", address: "Sarit Centre, Westlands, Nairobi, Kenya", latitude: -1.2634, longitude: 36.8047, phone: "+254-20-4451234", country: "Kenya" },
+  { name: "Mydawa Pharmacy - CBD", address: "Kimathi Street, Nairobi, Kenya", latitude: -1.2833, longitude: 36.8236, phone: "+254-20-2224455", country: "Kenya" },
+  { name: "Clicks Pharmacy - Sandton", address: "Sandton City Mall, Sandton, Johannesburg, South Africa", latitude: -26.1076, longitude: 28.0567, phone: "+27-11-7834567", country: "South Africa" },
+  { name: "Dis-Chem Pharmacy - Rosebank", address: "The Zone, Rosebank, Johannesburg, South Africa", latitude: -26.1467, longitude: 28.0436, phone: "+27-11-4471234", country: "South Africa" },
+
+  // Kigali, Rwanda. Real, currently-operating pharmacies sourced from Rwanda
+  // FDA's licensed-retail-pharmacy lists and public business directories
+  // (names/sectors verified; coordinates are neighbourhood-level
+  // approximations from known Kigali geography, not surveyed GPS pins —
+  // same precision level as the pharmacies above. Spot-check before relying
+  // on them for turn-by-turn navigation).
+  { name: "Pharmasave Ltd", address: "Kamatamu, Kacyiru, Gasabo, Kigali, Rwanda", latitude: -1.9331, longitude: 30.0902, phone: null, country: "Rwanda" },
+  { name: "Prayer Pharmacy Ltd", address: "Kibaza, Kacyiru, Gasabo, Kigali, Rwanda", latitude: -1.9344, longitude: 30.0916, phone: null, country: "Rwanda" },
+  { name: "Zoe Pharmacy Ltd", address: "Kimihurura, Gasabo, Kigali, Rwanda", latitude: -1.9430, longitude: 30.0951, phone: null, country: "Rwanda" },
+  { name: "Pharma Best Ltd", address: "Rukiri II, Remera, Gasabo, Kigali, Rwanda", latitude: -1.9524, longitude: 30.1058, phone: null, country: "Rwanda" },
+  { name: "Pharmacie Continentale", address: "Rukiri I, Kisimenti, Remera, Gasabo, Kigali, Rwanda", latitude: -1.9508, longitude: 30.1044, phone: null, country: "Rwanda" },
+  { name: "Pharmacie La Reference Ltd", address: "Rukiri I, Gisimenti, Remera, Gasabo, Kigali, Rwanda", latitude: -1.9512, longitude: 30.1036, phone: null, country: "Rwanda" },
+  { name: "Pharmacie Teta Remera", address: "Rukiri I, Remera, Gasabo, Kigali, Rwanda", latitude: -1.9500, longitude: 30.1050, phone: null, country: "Rwanda" },
+  { name: "Vine Pharmacy - Kisimenti Branch", address: "KG 4 Ave, Chez Lando Roundabout, Remera, Gasabo, Kigali, Rwanda", latitude: -1.9506, longitude: 30.1040, phone: "+250-780-303-573", country: "Rwanda" },
+  { name: "Vine Pharmacy - Kigali Heights Branch", address: "KG 7 Ave, Kigali Heights, Kimihurura, Gasabo, Kigali, Rwanda", latitude: -1.9447, longitude: 30.0937, phone: "+250-780-303-574", country: "Rwanda" },
+  { name: "Vine Pharmacy - Gacuriro Branch", address: "KG 9 Ave, Gacuriro, Gasabo, Kigali, Rwanda", latitude: -1.9230, longitude: 30.1010, phone: "+250-788-350-245", country: "Rwanda" },
+  { name: "Dorah Pharmacy Ltd", address: "Kagugu, Kinyinya, Gasabo, Kigali, Rwanda", latitude: -1.9146, longitude: 30.0844, phone: null, country: "Rwanda" },
+  { name: "Medplus Pharmacy Ltd - Gisozi Branch", address: "Ruhango, Gisozi, Gasabo, Kigali, Rwanda", latitude: -1.9352, longitude: 30.0552, phone: null, country: "Rwanda" },
+  { name: "Fina Pharmacy Ltd", address: "Kibagabaga, Kimironko, Gasabo, Kigali, Rwanda", latitude: -1.9438, longitude: 30.1248, phone: null, country: "Rwanda" },
+  { name: "Ellis Pharmacy Ltd", address: "Munezero, Gisozi, Gasabo, Kigali, Rwanda", latitude: -1.9337, longitude: 30.0567, phone: null, country: "Rwanda" },
+  { name: "Dove Pharmacy Ltd", address: "Gakinjiro, Gisozi, Gasabo, Kigali, Rwanda", latitude: -1.9364, longitude: 30.0538, phone: null, country: "Rwanda" },
+  { name: "Chappedeline Pharmacy Ltd", address: "Karama, Kinyinya, Gasabo, Kigali, Rwanda", latitude: -1.9128, longitude: 30.0868, phone: null, country: "Rwanda" },
+  { name: "Curantur Ltd", address: "Murama, Kinyinya, Gasabo, Kigali, Rwanda", latitude: -1.9172, longitude: 30.0821, phone: null, country: "Rwanda" },
+  { name: "Declauphar Ltd", address: "Kagugu, Kinyinya, Gasabo, Kigali, Rwanda", latitude: -1.9160, longitude: 30.0857, phone: null, country: "Rwanda" },
+  { name: "Goodlife Pharmacy - Kimironko Branch", address: "Across Igihozo Supermarket, Kimironko, Gasabo, Kigali, Rwanda", latitude: -1.9452, longitude: 30.1262, phone: null, country: "Rwanda" },
+  { name: "Goodlife Pharmacy - Gisozi Branch", address: "KG 14 Ave, Gisozi, Gasabo, Kigali, Rwanda", latitude: -1.9339, longitude: 30.0561, phone: null, country: "Rwanda" },
+  { name: "Segilt Rx Clinic Pharmacy Limited", address: "Niboye, Kicukiro, Kigali, Rwanda", latitude: -1.9718, longitude: 30.1142, phone: null, country: "Rwanda" },
+  { name: "Semu Pharmacy Ltd", address: "Niboye, Kicukiro, Kigali, Rwanda", latitude: -1.9732, longitude: 30.1158, phone: null, country: "Rwanda" },
+  { name: "Vita Gratia Pharmacy Ltd", address: "Niboye, Kicukiro, Kigali, Rwanda", latitude: -1.9709, longitude: 30.1163, phone: null, country: "Rwanda" },
+  { name: "Memia's Pharmacy Ltd", address: "Niboye, Kicukiro, Kigali, Rwanda", latitude: -1.9725, longitude: 30.1129, phone: null, country: "Rwanda" },
+  { name: "Regopharma Limited", address: "Kanombe, Kicukiro, Kigali, Rwanda", latitude: -1.9686, longitude: 30.1395, phone: null, country: "Rwanda" },
+  { name: "Aviel Pharmacy Ltd", address: "Kanombe, Kicukiro, Kigali, Rwanda", latitude: -1.9701, longitude: 30.1412, phone: null, country: "Rwanda" },
+  { name: "Unipharma B3", address: "Kanombe, Kicukiro, Kigali, Rwanda", latitude: -1.9673, longitude: 30.1378, phone: null, country: "Rwanda" },
+  { name: "Top Pharmacy Ltd", address: "Kanombe, Kicukiro, Kigali, Rwanda", latitude: -1.9668, longitude: 30.1421, phone: null, country: "Rwanda" },
+  { name: "Welcome Pharmacy Ltd", address: "Kanombe, Kicukiro, Kigali, Rwanda", latitude: -1.9709, longitude: 30.1367, phone: null, country: "Rwanda" },
+  { name: "Meniphar Ltd", address: "Kanombe, Kicukiro, Kigali, Rwanda", latitude: -1.9694, longitude: 30.1439, phone: null, country: "Rwanda" },
+  { name: "Shoppers Pharmaplus Ltd", address: "Gikondo, Kicukiro, Kigali, Rwanda", latitude: -1.9707, longitude: 30.0755, phone: null, country: "Rwanda" },
+  { name: "Adrenaline Pharmacy Ltd", address: "Kabeza Modern Market, Kanombe, Kicukiro, Kigali, Rwanda", latitude: -1.9652, longitude: 30.1358, phone: null, country: "Rwanda" },
+  { name: "Pharmacie Conseil - Chadel Building", address: "KN 78 Street, Nyarugenge, Kigali, Rwanda", latitude: -1.9463, longitude: 30.0601, phone: "+250-788-380-066", country: "Rwanda" },
+  { name: "Pharmacie Conseil - Prester Building", address: "KG 541 Street, Nyarugenge, Kigali, Rwanda", latitude: -1.9418, longitude: 30.0642, phone: "+250-788-381-259", country: "Rwanda" },
+  { name: "Pharmacie Conseil - KG 383 Branch", address: "KG 383 Street, Nyarugenge, Kigali, Rwanda", latitude: -1.9455, longitude: 30.0587, phone: "+250-781-928-457", country: "Rwanda" },
+  { name: "Kipharma", address: "KN 74 Street, Nyarugenge, Kigali, Rwanda", latitude: -1.9441, longitude: 30.0619, phone: "+250-252-572-944", country: "Rwanda" },
+  { name: "Pharmacie IRIS", address: "Avenue du Commerce, Nyarugenge, Kigali, Rwanda", latitude: -1.9469, longitude: 30.0596, phone: null, country: "Rwanda" },
+  { name: "PharmaLab Ltd", address: "KN 59 Street, Nyarugenge, Kigali, Rwanda", latitude: -1.9481, longitude: 30.0625, phone: "+250-788-477-537", country: "Rwanda" },
+  { name: "Pro Vita Pharmacy Ltd", address: "Kivugiza, Nyamirambo, Nyarugenge, Kigali, Rwanda", latitude: -1.9706, longitude: 30.0398, phone: null, country: "Rwanda" },
 ];
+
+// Which regulator(s)' approved medicines a pharmacy in this country plausibly
+// stocks — reuses the country<->regulatory_body pairing the medicines seed
+// already has, rather than inventing a separate per-medicine stock list.
+// Rwanda has no dedicated regulator in this demo's medicines dataset, so its
+// pharmacies are modeled as stocking the full pan-regional catalogue instead
+// of one country's slice of it — realistic for a market that imports rather
+// than manufactures most of its registered medicines.
+const COUNTRY_TO_REGULATORS: Record<string, RegulatoryBody[]> = {
+  Nigeria: ["NAFDAC"],
+  Kenya: ["KEBS"],
+  "South Africa": ["SAHPRA"],
+  Rwanda: ["NAFDAC", "KEBS", "SAHPRA"],
+};
 
 interface HealthAuthoritySeed {
   country: string;
@@ -144,6 +205,7 @@ async function seed() {
 
   try {
     const regulatorSeq: Record<RegulatoryBody, number> = { NAFDAC: 0, KEBS: 0, SAHPRA: 0 };
+    const medicineIdsByRegulator: Record<RegulatoryBody, string[]> = { NAFDAC: [], KEBS: [], SAHPRA: [] };
 
     for (const medicine of medicines) {
       regulatorSeq[medicine.regulatoryBody] += 1;
@@ -177,6 +239,7 @@ async function seed() {
         ]
       );
       const medicineId = medicineRows[0].id;
+      medicineIdsByRegulator[medicine.regulatoryBody].push(medicineId);
 
       for (const angle of ["front", "back"] as const) {
         await pool.query(
@@ -207,16 +270,33 @@ async function seed() {
       }
     }
 
+    let stockLinksCreated = 0;
+
     for (const pharmacy of pharmacies) {
-      await pool.query(
+      const { rows: pharmacyRows } = await pool.query<{ id: string }>(
         `INSERT INTO pharmacies (name, address, latitude, longitude, phone)
          VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (name, address) DO UPDATE SET
            latitude = EXCLUDED.latitude,
            longitude = EXCLUDED.longitude,
-           phone = EXCLUDED.phone`,
+           phone = EXCLUDED.phone
+         RETURNING id`,
         [pharmacy.name, pharmacy.address, pharmacy.latitude, pharmacy.longitude, pharmacy.phone]
       );
+      const pharmacyId = pharmacyRows[0].id;
+
+      const regulators = COUNTRY_TO_REGULATORS[pharmacy.country] ?? [];
+      const stockedMedicineIds = regulators.flatMap((regulator) => medicineIdsByRegulator[regulator]);
+
+      for (const medicineId of stockedMedicineIds) {
+        await pool.query(
+          `INSERT INTO pharmacy_medicine_stock (pharmacy_id, medicine_id)
+           VALUES ($1, $2)
+           ON CONFLICT (pharmacy_id, medicine_id) DO NOTHING`,
+          [pharmacyId, medicineId]
+        );
+        stockLinksCreated += 1;
+      }
     }
 
     for (const ha of healthAuthorities) {
@@ -232,7 +312,7 @@ async function seed() {
 
     const { rows } = await pool.query<{ count: string }>("SELECT count(*) FROM medicines");
     console.log(
-      `Seeded ${medicines.length} medicines (with photos + checklists), ${pharmacies.length} pharmacies, and ${healthAuthorities.length} health authorities. Table now has ${rows[0].count} rows.`
+      `Seeded ${medicines.length} medicines (with photos + checklists), ${pharmacies.length} pharmacies (${stockLinksCreated} stock links), and ${healthAuthorities.length} health authorities. Table now has ${rows[0].count} rows.`
     );
   } finally {
     await pool.end();

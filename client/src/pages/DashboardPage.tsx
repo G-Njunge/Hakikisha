@@ -197,6 +197,11 @@ export default function DashboardPage() {
                     </div>
                     <div className="result-meta">Barcode: {scan.barcode ?? "Unknown"}</div>
                     <div className="result-meta">{new Date(scan.scannedAt).toLocaleString()}</div>
+                    {scan.medicineId && (
+                      <div className="result-meta">
+                        <Link to={`/medicines/${scan.medicineId}`}>View medicine details</Link>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
