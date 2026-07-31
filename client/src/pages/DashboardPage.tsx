@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import type { CSSProperties, FormEvent } from "react";
+import { Link } from "react-router-dom";
 import { isAxiosError } from "axios";
 import { useAuth } from "../hooks/useAuth";
 import { changePassword } from "../api/auth";
@@ -8,25 +8,26 @@ import { getMyScans } from "../api/scans";
 import { getMyReports } from "../api/reports";
 import type { ScanHistoryItem, ScanResultCode } from "../types/scan";
 import type { ReportStatus, ReportSummary } from "../types/report";
+import AuthNav from "../components/AuthNav";
 
 type Tab = "scans" | "reports" | "settings";
 
 const TABS: Array<{ key: Tab; label: string }> = [
-  { key: "scans", label: "Scan History" },
-  { key: "reports", label: "Report History" },
-  { key: "settings", label: "Account Settings" },
+  { key: "scans", label: "Scan history" },
+  { key: "reports", label: "My reports" },
+  { key: "settings", label: "Account settings" },
 ];
 
-function scanResultBadgeClass(result: ScanResultCode): string {
+function scanResultBadge(result: ScanResultCode): { bg: string; color: string } {
   switch (result) {
     case "authentic":
-      return "status-badge approved";
+      return { bg: "#5fbf7d", color: "#2f8f52" };
     case "expired":
-      return "status-badge expired";
+      return { bg: "#b8862f", color: "#b8862f" };
     case "counterfeit":
-      return "status-badge rejected";
+      return { bg: "#ff6b6b", color: "#d94f4f" };
     default:
-      return "status-badge pending";
+      return { bg: "#3e4440", color: "#3e4440" };
   }
 }
 
@@ -43,20 +44,36 @@ function reportStatusLabel(status: ReportStatus): string {
   }
 }
 
-function reportStatusBadgeClass(status: ReportStatus): string {
-  switch (status) {
-    case "resolved":
-      return "status-badge approved";
-    case "dismissed":
-      return "status-badge rejected";
-    default:
-      return "status-badge pending";
-  }
+function reportStatusColor(status: ReportStatus): string {
+  return status === "resolved" ? "#2f8f52" : "#b8862f";
 }
 
+const tabButtonStyle = (active: boolean): CSSProperties => ({
+  padding: "11px 24px",
+  border: `1.5px solid ${active ? "#103c1c" : "#1A1A2E22"}`,
+  borderRadius: 999,
+  background: active ? "#103c1c" : "transparent",
+  color: active ? "#FDFBF7" : "#1A1A2E88",
+  fontSize: 14,
+  fontWeight: 700,
+  cursor: "pointer",
+  fontFamily: "'Inter', sans-serif",
+});
+
+const settingsInputStyle: CSSProperties = {
+  padding: "14px 18px",
+  borderRadius: 999,
+  fontSize: 14.5,
+  fontFamily: "'Inter', sans-serif",
+  color: "#1A1A2E",
+  border: "none",
+  width: "100%",
+  boxSizing: "border-box",
+  marginBottom: 12,
+};
+
 export default function DashboardPage() {
-  const { user, logout, updateDisplayName } = useAuth();
-  const navigate = useNavigate();
+  const { user, updateDisplayName } = useAuth();
   const [tab, setTab] = useState<Tab>("scans");
 
   const [scans, setScans] = useState<ScanHistoryItem[] | null>(null);
@@ -95,13 +112,14 @@ export default function DashboardPage() {
       });
   }, [user]);
 
-  useEffect(() => {
+  // Adjusts displayName in response to `user` changing (e.g. once the
+  // authenticated user loads after mount) during render rather than via an
+  // effect + synchronous setState, per React's recommended pattern for
+  // syncing state to a prop change.
+  const [prevUser, setPrevUser] = useState(user);
+  if (user !== prevUser) {
+    setPrevUser(user);
     if (user) setDisplayName(user.fullName);
-  }, [user]);
-
-  async function handleLogout() {
-    await logout();
-    navigate("/login");
   }
 
   async function handleNameSubmit(event: FormEvent<HTMLFormElement>) {
@@ -162,149 +180,205 @@ export default function DashboardPage() {
   }
 
   return (
-    <main className="page-shell">
-      <section className="page-card">
-        <h1 className="page-title">My dashboard</h1>
-        <p className="page-subtitle">
-          {user.fullName} ({user.email})
+    <div className="hk-page" style={{ minHeight: "100vh", width: "100%", overflowX: "hidden", background: "#FDFBF7", position: "relative" }}>
+      <img
+        src="/assets/home-bg-linen.png"
+        alt=""
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
+      />
+      <AuthNav />
+
+      <section style={{ padding: "56px 56px 20px", maxWidth: 1160, margin: "0 auto", position: "relative", zIndex: 1 }}>
+        <h1 style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 800, fontSize: 34, letterSpacing: "-0.01em", margin: "0 0 8px", color: "#1A1A2E" }}>
+          My dashboard
+        </h1>
+        <p style={{ fontSize: 14.5, color: "#1A1A2E88", margin: 0 }}>
+          Every pack you've scanned and every report you've filed, in one place.
         </p>
+      </section>
 
-        <ol className="step-indicator">
+      <section style={{ padding: "20px 56px 0", maxWidth: 1160, margin: "0 auto", position: "relative", zIndex: 1 }}>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           {TABS.map((t) => (
-            <li
-              key={t.key}
-              className={t.key === tab ? "step active" : "step"}
-              onClick={() => setTab(t.key)}
-              style={{ cursor: "pointer" }}
-            >
+            <button key={t.key} type="button" className="hk-tab" onClick={() => setTab(t.key)} style={tabButtonStyle(t.key === tab)}>
               {t.label}
-            </li>
+            </button>
           ))}
-        </ol>
+        </div>
+      </section>
 
+      <section style={{ padding: "24px 56px 90px", maxWidth: 1160, margin: "0 auto", position: "relative", zIndex: 1 }}>
         {tab === "scans" && (
-          <div>
-            {scansError && <p className="page-status error">{scansError}</p>}
-            {!scansError && !scans && <p className="page-status">Loading scan history...</p>}
-            {scans && scans.length === 0 && <p className="page-status">You haven't scanned anything yet.</p>}
-            {scans && scans.length > 0 && (
-              <ul className="result-list">
-                {scans.map((scan) => (
-                  <li key={scan.id} className="pharmacy-card">
-                    <div className="result-top">
-                      <span className="result-name">{scan.medicineName ?? scan.barcode ?? "Unknown"}</span>
-                      <span className={scanResultBadgeClass(scan.result)}>{scan.result}</span>
-                    </div>
-                    <div className="result-meta">Barcode: {scan.barcode ?? "Unknown"}</div>
-                    <div className="result-meta">{new Date(scan.scannedAt).toLocaleString()}</div>
-                    {scan.medicineId && (
-                      <div className="result-meta">
-                        <Link to={`/medicines/${scan.medicineId}`}>View medicine details</Link>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {scansError && <p style={{ color: "#b91c1c", fontSize: 13.5 }}>{scansError}</p>}
+            {!scansError && !scans && <p style={{ fontSize: 13.5, color: "#1A1A2E88" }}>Loading scan history...</p>}
+            {scans && scans.length === 0 && (
+              <div className="hk-card" style={{ borderRadius: 20, padding: 40, textAlign: "center", color: "#1A1A2E88", fontSize: 14.5 }}>
+                No scans yet. Verify a pack from the home page to see it here.
+              </div>
             )}
+            {scans &&
+              scans.length > 0 &&
+              scans.map((scan) => {
+                const badge = scanResultBadge(scan.result);
+                return (
+                  <div key={scan.id} className="hk-card" style={{ borderRadius: 20, padding: "22px 26px", display: "flex", alignItems: "center", gap: 20 }}>
+                    <div
+                      style={{
+                        width: 46,
+                        height: 46,
+                        borderRadius: "50%",
+                        background: badge.bg,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      <span style={{ fontSize: 19, color: "#FDFBF7", fontWeight: 800 }}>{scan.result === "authentic" ? "✓" : "!"}</span>
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 15.5, color: "#1A1A2E" }}>
+                        {scan.medicineName ?? scan.barcode ?? "Unknown"}
+                      </div>
+                      <div style={{ fontSize: 13, color: "#1A1A2E77", marginTop: 2 }}>Barcode: {scan.barcode ?? "Unknown"}</div>
+                      {scan.medicineId && (
+                        <Link to={`/medicines/${scan.medicineId}`} style={{ fontSize: 12.5, fontWeight: 600, color: "#103c1c" }}>
+                          View medicine details
+                        </Link>
+                      )}
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", color: badge.color, textTransform: "uppercase" }}>
+                        {scan.result}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#1A1A2E66", marginTop: 2 }}>{new Date(scan.scannedAt).toLocaleString()}</div>
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         )}
 
         {tab === "reports" && (
-          <div>
-            {reportsError && <p className="page-status error">{reportsError}</p>}
-            {!reportsError && !reports && <p className="page-status">Loading report history...</p>}
-            {reports && reports.length === 0 && <p className="page-status">You haven't submitted any reports.</p>}
-            {reports && reports.length > 0 && (
-              <ul className="result-list">
-                {reports.map((report) => (
-                  <li key={report.id} className="pharmacy-card">
-                    <div className="result-top">
-                      <span className="result-name">{report.productName ?? "Unknown product"}</span>
-                      <span className={reportStatusBadgeClass(report.status)}>
-                        {reportStatusLabel(report.status)}
-                      </span>
-                    </div>
-                    <div className="result-meta">{report.description}</div>
-                    {report.purchaseLocation && <div className="result-meta">Bought at: {report.purchaseLocation}</div>}
-                    <div className="result-meta">{new Date(report.createdAt).toLocaleString()}</div>
-                  </li>
-                ))}
-              </ul>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {reportsError && <p style={{ color: "#b91c1c", fontSize: 13.5 }}>{reportsError}</p>}
+            {!reportsError && !reports && <p style={{ fontSize: 13.5, color: "#1A1A2E88" }}>Loading report history...</p>}
+            {reports && reports.length === 0 && (
+              <div className="hk-card" style={{ borderRadius: 20, padding: 40, textAlign: "center", color: "#1A1A2E88", fontSize: 14.5 }}>
+                You haven't filed any reports yet.
+              </div>
             )}
+            {reports &&
+              reports.length > 0 &&
+              reports.map((report) => (
+                <div key={report.id} className="hk-card" style={{ borderRadius: 20, padding: "22px 26px", display: "flex", alignItems: "center", gap: 20 }}>
+                  <div
+                    style={{
+                      width: 46,
+                      height: 46,
+                      borderRadius: 14,
+                      background: "#3e4440",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span style={{ fontSize: 18, color: "#FDFBF7" }}>⚑</span>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 15.5, color: "#1A1A2E" }}>
+                      {report.productName ?? "Unknown product"}
+                    </div>
+                    <div style={{ fontSize: 13, color: "#1A1A2E77", marginTop: 2 }}>{report.description}</div>
+                    {report.purchaseLocation && (
+                      <div style={{ fontSize: 12.5, color: "#1A1A2E77" }}>Bought at: {report.purchaseLocation}</div>
+                    )}
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.03em", color: reportStatusColor(report.status) }}>
+                      {reportStatusLabel(report.status)}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#1A1A2E66", marginTop: 2 }}>{new Date(report.createdAt).toLocaleString()}</div>
+                  </div>
+                </div>
+              ))}
           </div>
         )}
 
         {tab === "settings" && (
-          <div>
-            <div className="barcode-result" style={{ marginBottom: 16 }}>
-              <h2>Display name</h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 440 }}>
+            <div className="hk-neu-panel" style={{ borderRadius: 24, padding: 28 }}>
+              <h2 style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 17, margin: "0 0 16px", color: "#1A1A2E" }}>
+                Display name
+              </h2>
               <form onSubmit={handleNameSubmit}>
                 <input
-                  className="barcode-input"
+                  className="hk-neu-field"
                   type="text"
                   value={displayName}
                   onChange={(event) => setDisplayName(event.target.value)}
+                  style={settingsInputStyle}
                 />
-                <p className="page-link-row">
-                  <button type="submit" disabled={nameStatus.type === "saving"}>
-                    {nameStatus.type === "saving" ? "Saving..." : "Save"}
-                  </button>
-                </p>
-                {nameStatus.type === "success" && <p className="page-status">{nameStatus.message}</p>}
-                {nameStatus.type === "error" && <p className="page-status error">{nameStatus.message}</p>}
+                <button type="submit" disabled={nameStatus.type === "saving"} className="hk-neu-btn" style={{ padding: "12px 24px", border: "none", borderRadius: 999, background: "#103c1c", color: "#FDFBF7", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+                  {nameStatus.type === "saving" ? "Saving..." : "Save"}
+                </button>
+                {nameStatus.type === "success" && <p style={{ fontSize: 13, color: "#2f8f52", marginTop: 10 }}>{nameStatus.message}</p>}
+                {nameStatus.type === "error" && <p style={{ fontSize: 13, color: "#b91c1c", marginTop: 10 }}>{nameStatus.message}</p>}
               </form>
             </div>
 
-            <div className="barcode-result">
-              <h2>Change password</h2>
+            <div className="hk-neu-panel" style={{ borderRadius: 24, padding: 28 }}>
+              <h2 style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 17, margin: "0 0 16px", color: "#1A1A2E" }}>
+                Change password
+              </h2>
               <form onSubmit={handlePasswordSubmit}>
                 <input
-                  className="barcode-input"
+                  className="hk-neu-field"
                   type="password"
                   placeholder="Current password"
                   value={currentPassword}
                   onChange={(event) => setCurrentPassword(event.target.value)}
-                  style={{ marginBottom: 10 }}
+                  style={settingsInputStyle}
                 />
-                <br />
                 <input
-                  className="barcode-input"
+                  className="hk-neu-field"
                   type="password"
                   placeholder="New password"
                   value={newPassword}
                   onChange={(event) => setNewPassword(event.target.value)}
-                  style={{ marginBottom: 10 }}
+                  style={settingsInputStyle}
                 />
-                <br />
                 <input
-                  className="barcode-input"
+                  className="hk-neu-field"
                   type="password"
                   placeholder="Confirm new password"
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
+                  style={settingsInputStyle}
                 />
-                <p className="page-link-row">
-                  <button type="submit" disabled={passwordStatus.type === "saving"}>
-                    {passwordStatus.type === "saving" ? "Changing..." : "Change password"}
-                  </button>
-                </p>
-                {passwordStatus.type === "success" && <p className="page-status">{passwordStatus.message}</p>}
-                {passwordStatus.type === "error" && <p className="page-status error">{passwordStatus.message}</p>}
+                <button type="submit" disabled={passwordStatus.type === "saving"} className="hk-neu-btn" style={{ padding: "12px 24px", border: "none", borderRadius: 999, background: "#103c1c", color: "#FDFBF7", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}>
+                  {passwordStatus.type === "saving" ? "Changing..." : "Change password"}
+                </button>
+                {passwordStatus.type === "success" && <p style={{ fontSize: 13, color: "#2f8f52", marginTop: 10 }}>{passwordStatus.message}</p>}
+                {passwordStatus.type === "error" && <p style={{ fontSize: 13, color: "#b91c1c", marginTop: 10 }}>{passwordStatus.message}</p>}
               </form>
             </div>
-
-            <p className="page-link-row">
-              <button type="button" onClick={handleLogout}>
-                Logout
-              </button>
-            </p>
           </div>
         )}
-
-        <p className="page-link-row">
-          <Link to="/">Back to home</Link>
-        </p>
       </section>
-    </main>
+
+      <footer style={{ padding: "22px 64px", background: "#103c1c", position: "relative", zIndex: 1 }}>
+        <div style={{ maxWidth: 1360, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ fontSize: 13, color: "#ffffff66" }}>© 2026 Hakikisha</div>
+          <img
+            src="/assets/hakikisha-logo.png"
+            alt="Hakikisha"
+            style={{ height: 48, width: "auto", display: "block", filter: "brightness(0) saturate(100%) invert(1)" }}
+          />
+        </div>
+      </footer>
+    </div>
   );
 }

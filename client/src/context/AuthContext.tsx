@@ -1,13 +1,13 @@
 import { createContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import * as authApi from "../api/auth";
-import { SESSION_EXPIRED_EVENT, getAccessToken } from "../api/tokenStorage";
+import { SESSION_EXPIRED_EVENT } from "../api/client";
 import type { LoginPayload, RegisterPayload, User } from "../types/auth";
 
 export interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
-  login: (payload: LoginPayload) => Promise<void>;
+  login: (payload: LoginPayload, remember: boolean) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
   updateDisplayName: (fullName: string) => Promise<void>;
@@ -18,13 +18,12 @@ export const AuthContext = createContext<AuthContextValue | undefined>(undefined
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(() => !!getAccessToken());
+  // With auth state living in httpOnly cookies (unreadable by JS), there's
+  // no local signal to check before deciding whether a session might exist
+  // — every mount just asks the server via /me and treats a 401 as logged-out.
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!getAccessToken()) {
-      return;
-    }
-
     authApi
       .fetchCurrentUser()
       .then(setUser)
@@ -44,8 +43,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
   }, []);
 
-  async function login(payload: LoginPayload) {
-    const loggedInUser = await authApi.login(payload);
+  async function login(payload: LoginPayload, remember: boolean) {
+    const loggedInUser = await authApi.login(payload, remember);
     setUser(loggedInUser);
   }
 
@@ -54,8 +53,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
-    await authApi.logout();
-    setUser(null);
+    try {
+      await authApi.logout();
+    } finally {
+      // Always end the local session, even if the network call failed
+      // (offline, server down) — the user asked to log out, so the UI must
+      // reflect that regardless of whether the server heard about it.
+      setUser(null);
+    }
   }
 
   async function updateDisplayName(fullName: string) {

@@ -10,6 +10,7 @@ import {
   verifyEmailVerificationToken,
 } from "../lib/tokens";
 import { sendVerificationEmail } from "../lib/email";
+import { REFRESH_COOKIE, clearAuthCookies, generateCsrfToken, setAuthCookies } from "../lib/cookies";
 
 const router = Router();
 
@@ -52,11 +53,11 @@ function toUserResponse(row: UserRow) {
   };
 }
 
-async function issueRefreshToken(userId: string) {
+async function issueRefreshToken(userId: string, remember: boolean) {
   const { token, expiresAt } = generateRefreshToken();
   await pool.query(
-    "INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)",
-    [userId, hashToken(token), expiresAt]
+    "INSERT INTO refresh_tokens (user_id, token_hash, expires_at, remember) VALUES ($1, $2, $3, $4)",
+    [userId, hashToken(token), expiresAt, remember]
   );
   return token;
 }
@@ -116,7 +117,7 @@ router.post("/register", async (req, res) => {
     return;
   }
 
-  const passwordHash = await bcrypt.hash(password, 10);
+  const passwordHash = await bcrypt.hash(password, 12);
 
   const { rows } = await pool.query<UserRow>(
     `INSERT INTO users (email, password_hash, full_name, country, role)
@@ -205,7 +206,7 @@ router.get("/verify-email", async (req, res) => {
 });
 
 router.post("/login", async (req, res) => {
-  const { email, password } = req.body ?? {};
+  const { email, password, remember } = req.body ?? {};
   const normalizedEmail = normalizeEmail(email);
 
   if (!normalizedEmail || typeof password !== "string") {
@@ -230,26 +231,26 @@ router.post("/login", async (req, res) => {
     return;
   }
 
+  const rememberChoice = remember === true;
   const { token: accessToken } = signAccessToken({ sub: user.id, role: user.role });
-  const refreshToken = await issueRefreshToken(user.id);
+  const refreshToken = await issueRefreshToken(user.id, rememberChoice);
+  const csrfToken = generateCsrfToken();
 
-  res.status(200).json({
-    accessToken,
-    refreshToken,
-    user: toUserResponse(user),
-  });
+  setAuthCookies(res, { accessToken, refreshToken, csrfToken, remember: rememberChoice });
+
+  res.status(200).json({ user: toUserResponse(user) });
 });
 
 router.post("/refresh", async (req, res) => {
-  const { refreshToken } = req.body ?? {};
+  const refreshToken = req.cookies?.[REFRESH_COOKIE];
 
   if (typeof refreshToken !== "string") {
-    res.status(400).json({ error: "refreshToken is required" });
+    res.status(401).json({ error: "No refresh token cookie present" });
     return;
   }
 
   const { rows } = await pool.query(
-    `SELECT rt.id, rt.user_id, u.role
+    `SELECT rt.id, rt.user_id, rt.remember, u.role
      FROM refresh_tokens rt
      JOIN users u ON u.id = rt.user_id
      WHERE rt.token_hash = $1 AND rt.revoked_at IS NULL AND rt.expires_at > now()`,
@@ -258,6 +259,7 @@ router.post("/refresh", async (req, res) => {
   const stored = rows[0];
 
   if (!stored) {
+    clearAuthCookies(res);
     res.status(401).json({ error: "Invalid or expired refresh token" });
     return;
   }
@@ -267,13 +269,19 @@ router.post("/refresh", async (req, res) => {
   await pool.query("UPDATE refresh_tokens SET revoked_at = now() WHERE id = $1", [stored.id]);
 
   const { token: accessToken } = signAccessToken({ sub: stored.user_id, role: stored.role });
-  const newRefreshToken = await issueRefreshToken(stored.user_id);
+  // Carries the original login's "remember me" choice forward — the request
+  // hitting this route has no way to know it itself, since browsers never
+  // expose a cookie's Max-Age back to the server, only its name/value.
+  const newRefreshToken = await issueRefreshToken(stored.user_id, stored.remember);
+  const csrfToken = generateCsrfToken();
 
-  res.status(200).json({ accessToken, refreshToken: newRefreshToken });
+  setAuthCookies(res, { accessToken, refreshToken: newRefreshToken, csrfToken, remember: stored.remember });
+
+  res.status(204).send();
 });
 
 router.post("/logout", authenticate, async (req, res) => {
-  const { refreshToken } = req.body ?? {};
+  const refreshToken = req.cookies?.[REFRESH_COOKIE];
 
   await pool.query(
     `INSERT INTO revoked_access_tokens (jti, expires_at)
@@ -289,6 +297,7 @@ router.post("/logout", authenticate, async (req, res) => {
     );
   }
 
+  clearAuthCookies(res);
   res.status(204).send();
 });
 
@@ -357,7 +366,7 @@ router.post("/change-password", authenticate, async (req, res) => {
     return;
   }
 
-  const newPasswordHash = await bcrypt.hash(newPassword, 10);
+  const newPasswordHash = await bcrypt.hash(newPassword, 12);
 
   await pool.query("UPDATE users SET password_hash = $1, updated_at = now() WHERE id = $2", [
     newPasswordHash,

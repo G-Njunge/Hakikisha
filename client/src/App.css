@@ -35,6 +35,97 @@
   100% { transform: scale(0); opacity: 0; }
 }
 
+/* New design system (2026 refresh) — a distinct "hk-" prefixed set kept
+   alongside the legacy classes below rather than restyling them in place,
+   because SearchPage/MedicineDetailPage/AdminReportsPage deliberately still
+   use the legacy classes and must render unchanged. Pages using the new look
+   (Landing, Login, Register, Home, BarcodeScan, Dashboard, Report, Pharmacy
+   Map, Logout) use these instead. */
+@keyframes hk-scanline {
+  0%, 15% { top: 8%; }
+  50% { top: 88%; }
+  85%, 100% { top: 8%; }
+}
+@keyframes hk-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(16, 60, 28, 0.35); }
+  100% { box-shadow: 0 0 0 18px rgba(16, 60, 28, 0); }
+}
+
+.hk-neu-field {
+  background: #E4E7ED;
+  border: none;
+  box-shadow: inset 6px 6px 12px #babecc, inset -6px -6px 12px #ffffff;
+}
+.hk-neu-field:focus {
+  outline: none;
+  box-shadow: inset 5px 5px 10px #babecc, inset -5px -5px 10px #ffffff;
+}
+.hk-neu-field::placeholder {
+  color: #1A1A2E55;
+}
+.hk-neu-upload {
+  background: #E4E7ED;
+  box-shadow: inset 5px 5px 10px #babecc, inset -5px -5px 10px #ffffff;
+}
+.hk-neu-panel {
+  background: #E4E7ED;
+  box-shadow: 9px 9px 18px #babecc, -9px -9px 18px #ffffffaa;
+}
+.hk-neu-btn {
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.hk-neu-btn:hover {
+  transform: translateY(-1px);
+}
+.hk-neu-btn:active {
+  box-shadow: inset 4px 4px 10px #2c3330, inset -4px -4px 10px #4f5650 !important;
+  transform: translateY(0);
+}
+.hk-card {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  background: #FDFBF733;
+  border: 1.5px solid #1A1A2E33;
+  box-shadow: 9px 9px 18px #00000022, -6px -6px 14px #FFFFFF33;
+}
+.hk-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 12px 12px 24px #00000030, -8px -8px 18px #FFFFFF3d;
+}
+.hk-icon {
+  box-shadow: inset 4px 4px 8px rgba(0, 0, 0, 0.18), inset -3px -3px 7px rgba(255, 255, 255, 0.25);
+}
+.hk-tab {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.hk-btn {
+  transition: transform 0.25s cubic-bezier(.16,.8,.3,1), box-shadow 0.25s ease, background-color 0.25s ease;
+}
+.hk-btn:hover {
+  transform: translate3d(0, -2px, 0) scale(1.02);
+  box-shadow: 0 14px 28px -10px rgba(16, 60, 28, 0.35);
+}
+.hk-btn:active {
+  transform: translate3d(0, 0, 0) scale(0.98);
+}
+/* #root sets text-align: center and anchors get no text-decoration reset
+   (both leftover Vite-template defaults relied on elsewhere) — scope the fix
+   to just the new-design pages instead of changing those globally, since
+   Search/MedicineDetail/AdminReports must keep rendering unchanged. */
+.hk-page {
+  text-align: left;
+}
+.hk-page a {
+  text-decoration: none;
+}
+.hk-pharmacy-map-large {
+  height: 560px;
+  width: 100%;
+}
+.hk-pharmacy-map-large .leaflet-container {
+  height: 100%;
+  width: 100%;
+}
+
 .counter {
   font-size: 16px;
   padding: 5px 10px;

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import type { ChangeEvent, FormEvent } from "react";
-import { Link } from "react-router-dom";
+import type { ChangeEvent, CSSProperties, FormEvent } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { isAxiosError } from "axios";
 import { Html5Qrcode } from "html5-qrcode";
 import { getMedicineVerificationProfile, getNearbyPharmacies, scanBarcode, searchMedicines } from "../api/medicines";
 import type { MedicineSearchResult, MedicineVerificationProfile, NearbyPharmacy, ScanResult } from "../types/medicine";
 import PharmacyMap from "../components/PharmacyMap";
+import AuthNav from "../components/AuthNav";
 
 const BARCODE_PATTERN = /^\d{8,13}$/;
 
@@ -31,25 +32,78 @@ const STEPS: Array<{ key: Step; label: string }> = [
 const CAMERA_ELEMENT_ID = "barcode-reader";
 const FILE_SCAN_ELEMENT_ID = "barcode-file-reader";
 
+function chipStyle(active: boolean): { border: string; background: string; color: string } {
+  return active
+    ? { border: "#103c1c", background: "#103c1c0f", color: "#103c1c" }
+    : { border: "#1A1A2E22", background: "transparent", color: "#1A1A2E88" };
+}
+
 function StepIndicator({ current }: { current: Step }) {
   const currentIndex = STEPS.findIndex((s) => s.key === current);
   return (
-    <ol className="step-indicator">
-      {STEPS.map((step, index) => (
-        <li
-          key={step.key}
-          className={
-            index === currentIndex ? "step active" : index < currentIndex ? "step done" : "step"
-          }
-        >
-          {step.label}
-        </li>
-      ))}
-    </ol>
+    <div style={{ display: "flex", gap: 10, marginBottom: 30, flexWrap: "wrap" }}>
+      {STEPS.map((step, index) => {
+        const s = chipStyle(step.key === current);
+        return (
+          <div
+            key={step.key}
+            style={{
+              padding: "10px 18px",
+              borderRadius: 999,
+              border: `1.5px solid ${s.border}`,
+              background: s.background,
+              color: index < currentIndex ? "#2f8f52" : s.color,
+              fontSize: 13,
+              fontWeight: 700,
+              fontFamily: "'Inter', sans-serif",
+            }}
+          >
+            {step.label}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
+const panelStyle: CSSProperties = {
+  position: "relative",
+  zIndex: 1,
+  width: "100%",
+  maxWidth: 640,
+  background: "#E4E7ED",
+  borderRadius: 32,
+  padding: "44px 40px",
+  boxShadow: "0 30px 60px -24px rgba(16,60,28,0.4)",
+  margin: "0 auto",
+};
+
+const fieldInputStyle: CSSProperties = {
+  padding: "14px 18px",
+  borderRadius: 999,
+  fontSize: 14.5,
+  fontFamily: "'Inter', sans-serif",
+  color: "#1A1A2E",
+  border: "none",
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+const primaryButtonStyle: CSSProperties = {
+  padding: "13px 28px",
+  border: "none",
+  borderRadius: 999,
+  background: "#103c1c",
+  color: "#FDFBF7",
+  fontSize: 14.5,
+  fontWeight: 700,
+  cursor: "pointer",
+  fontFamily: "'Inter', sans-serif",
+};
+
 export default function BarcodeScanPage() {
+  const [searchParams] = useSearchParams();
+
   const [step, setStep] = useState<Step>("scan");
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -60,7 +114,7 @@ export default function BarcodeScanPage() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [isCameraActive, setIsCameraActive] = useState(() => searchParams.get("method") === "camera");
   const [cameraError, setCameraError] = useState<string | null>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const [isMobileDevice] = useState(() => isLikelyMobileDevice());
@@ -79,6 +133,20 @@ export default function BarcodeScanPage() {
   const [pharmacyStatus, setPharmacyStatus] = useState<"idle" | "loading" | "error" | "success">("idle");
   const [pharmacyError, setPharmacyError] = useState<string | null>(null);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  // Arriving from Home's "Enter code manually"/"Upload a photo" cards with a
+  // ?code= param (already-decoded barcode) auto-submits it once, so those
+  // launcher cards actually verify instead of just landing on an empty form.
+  const autoSubmittedCode = useRef(false);
+  useEffect(() => {
+    const code = searchParams.get("code");
+    if (code && !autoSubmittedCode.current) {
+      autoSubmittedCode.current = true;
+      setManualBarcode(code);
+      submitBarcode(code);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (!isCameraActive) return;
@@ -125,16 +193,24 @@ export default function BarcodeScanPage() {
         .then(() => html5QrCode.clear())
         .catch(() => {});
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCameraActive]);
 
   // Nudges the user toward the manual-entry/upload/search fallbacks if the
   // camera hasn't found a code within a few seconds, instead of leaving them
   // staring at a viewfinder with no feedback on what to do next.
   const [showScanningTip, setShowScanningTip] = useState(false);
+  // Tracks which isCameraActive value showScanningTip was last reset for, so
+  // the reset can happen during render (React's recommended way to adjust
+  // state in response to a prop/state change) instead of as a synchronous
+  // setState call inside the effect below.
+  const [tipResetForActive, setTipResetForActive] = useState(isCameraActive);
+
+  if (tipResetForActive !== isCameraActive) {
+    setTipResetForActive(isCameraActive);
+    setShowScanningTip(false);
+  }
 
   useEffect(() => {
-    setShowScanningTip(false);
     if (!isCameraActive) return;
 
     const timer = setTimeout(() => setShowScanningTip(true), 7000);
@@ -323,308 +399,399 @@ export default function BarcodeScanPage() {
     );
   }
 
-  return (
-    <main className="page-shell">
-      <section className="page-card">
-        <h1 className="page-title">Barcode scanner</h1>
-        <p className="page-subtitle">Verify barcodes from the local Hakikisha database only.</p>
+  const isVerified = scanResult?.status === "VERIFIED";
+  const bannerColor = isVerified ? "#2f8f52" : "#b8862f";
+  const bannerBg = isVerified ? "#5fbf7d22" : "#ff6b6b1a";
+  const bannerBorder = isVerified ? "#5fbf7d55" : "#ff6b6b55";
 
-        {step !== "scan" && <StepIndicator current={step} />}
+  return (
+    <div className="hk-page" style={{ minHeight: "100vh", width: "100%", overflowX: "hidden", background: "#FDFBF7", position: "relative" }}>
+      <img
+        src="/assets/home-bg-linen.png"
+        alt=""
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
+      />
+      <AuthNav />
+
+      <div style={{ position: "relative", zIndex: 1, padding: "40px 24px 90px" }}>
+        <h1 style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 800, fontSize: 30, textAlign: "center", margin: "0 0 6px", color: "#1A1A2E" }}>
+          Barcode scanner
+        </h1>
+        <p style={{ textAlign: "center", fontSize: 14.5, color: "#1A1A2E88", margin: "0 0 26px" }}>
+          Verify barcodes from the local Hakikisha database only.
+        </p>
+
+        {step !== "scan" && <div style={{ display: "flex", justifyContent: "center" }}><StepIndicator current={step} /></div>}
 
         {step === "scan" && (
-          <>
-            <div className="scan-mode-row">
-              <button type="button" onClick={toggleCamera}>
+          <div style={panelStyle}>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+              <button type="button" onClick={toggleCamera} className="hk-neu-btn" style={primaryButtonStyle}>
                 {isCameraActive ? "Stop camera" : "Scan with camera"}
               </button>
             </div>
 
             {isCameraActive && (
               <>
-                <div className="camera-viewfinder">
+                <div style={{ maxWidth: 320, margin: "0 auto 16px", borderRadius: 16, overflow: "hidden" }}>
                   <div id={CAMERA_ELEMENT_ID} />
                 </div>
-                <p className="page-status scan-tip">
-                  Hold your phone steady, about 10–15cm from the package. Center the QR code in
-                  the box, with even lighting and no glare.
+                <p style={{ textAlign: "center", fontSize: 13.5, color: "#1A1A2E88", maxWidth: 380, margin: "0 auto 10px" }}>
+                  Hold your phone steady, about 10–15cm from the package. Center the QR code in the box, with
+                  even lighting and no glare.
                 </p>
                 {!isMobileDevice && (
-                  <p className="page-status scan-tip warn">
-                    Using a laptop or desktop webcam? Scanning may take noticeably longer than on
-                    a phone — try holding the package steady close to the camera, or use manual
-                    entry, photo upload, or search below instead.
+                  <p style={{ textAlign: "center", fontSize: 13, color: "#92400e", background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 10, padding: "8px 12px", maxWidth: 380, margin: "0 auto 10px" }}>
+                    Using a laptop or desktop webcam? Scanning may take noticeably longer than on a phone — try
+                    holding the package steady close to the camera, or use manual entry, photo upload, or search
+                    below instead.
                   </p>
                 )}
                 {showScanningTip && (
-                  <p className="page-status scan-tip warn">
-                    Still not scanning? Try moving a little closer or further away, or use manual
-                    entry, photo upload, or search below instead.
+                  <p style={{ textAlign: "center", fontSize: 13, color: "#92400e", background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 10, padding: "8px 12px", maxWidth: 380, margin: "0 auto 10px" }}>
+                    Still not scanning? Try moving a little closer or further away, or use manual entry, photo
+                    upload, or search below instead.
                   </p>
                 )}
               </>
             )}
-            {cameraError && <p className="page-status error">{cameraError}</p>}
+            {cameraError && <p style={{ textAlign: "center", color: "#b91c1c", fontSize: 13.5 }}>{cameraError}</p>}
 
-            <div className="scan-fallback">
-              <p className="page-status">Camera denied or not working? Enter the code manually.</p>
-              <form className="barcode-form" onSubmit={handleManualSubmit}>
+            <div style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid #1A1A2E15" }}>
+              <p style={{ fontSize: 13.5, color: "#1A1A2E88", marginBottom: 10 }}>Camera denied or not working? Enter the code manually.</p>
+              <form style={{ display: "flex", gap: 10, flexWrap: "wrap" }} onSubmit={handleManualSubmit}>
                 <input
-                  className="barcode-input"
+                  className="hk-neu-field"
                   type="text"
                   inputMode="numeric"
                   placeholder="Enter the barcode number"
                   value={manualBarcode}
                   onChange={(event) => setManualBarcode(event.target.value)}
+                  style={{ ...fieldInputStyle, flex: 1, minWidth: 220 }}
                 />
-                <button type="submit" disabled={isScanning}>
+                <button type="submit" disabled={isScanning} className="hk-neu-btn" style={primaryButtonStyle}>
                   {isScanning ? "Verifying..." : "Verify"}
                 </button>
               </form>
             </div>
 
-            <div className="scan-fallback">
-              <p className="page-status">Or upload a photo of the QR code instead.</p>
-              <label className="file-upload-button">
+            <div style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid #1A1A2E15" }}>
+              <p style={{ fontSize: 13.5, color: "#1A1A2E88", marginBottom: 10 }}>Or upload a photo of the QR code instead.</p>
+              <label className="hk-neu-upload" style={{ display: "inline-block", padding: "11px 22px", borderRadius: 999, color: "#1A1A2E88", fontSize: 13.5, fontWeight: 600, cursor: "pointer" }}>
                 {isFileScanning ? "Reading photo..." : "Upload photo"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  disabled={isFileScanning}
-                  hidden
-                />
+                <input type="file" accept="image/*" onChange={handleFileUpload} disabled={isFileScanning} hidden />
               </label>
               {/* Kept mounted (hidden) so the file-scan Html5Qrcode instance always has an element to bind to. */}
               <div id={FILE_SCAN_ELEMENT_ID} style={{ display: "none" }} />
             </div>
 
-            <div className="scan-fallback">
-              <p className="page-status">Still stuck? Search for the medicine by name instead.</p>
-              <form className="barcode-form" onSubmit={handleSearchSubmit}>
+            <div style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid #1A1A2E15" }}>
+              <p style={{ fontSize: 13.5, color: "#1A1A2E88", marginBottom: 10 }}>Still stuck? Search for the medicine by name instead.</p>
+              <form style={{ display: "flex", gap: 10, flexWrap: "wrap" }} onSubmit={handleSearchSubmit}>
                 <input
-                  className="barcode-input"
+                  className="hk-neu-field"
                   type="text"
                   placeholder="e.g. Panadol"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
+                  style={{ ...fieldInputStyle, flex: 1, minWidth: 220 }}
                 />
-                <button type="submit" disabled={isSearching}>
+                <button type="submit" disabled={isSearching} className="hk-neu-btn" style={primaryButtonStyle}>
                   {isSearching ? "Searching..." : "Search"}
                 </button>
               </form>
-              {searchError && <p className="page-status error">{searchError}</p>}
+              {searchError && <p style={{ color: "#b91c1c", fontSize: 13.5 }}>{searchError}</p>}
               {searchResults && searchResults.results.length === 0 && (
-                <p className="page-status">No medicines matched that search.</p>
+                <p style={{ fontSize: 13.5, color: "#1A1A2E88" }}>No medicines matched that search.</p>
               )}
               {searchResults && searchResults.results.length > 0 && (
-                <ul className="result-list">
+                <ul style={{ listStyle: "none", padding: 0, margin: "12px 0 0", display: "flex", flexDirection: "column", gap: 10 }}>
                   {searchResults.results.map((medicine) => (
                     <li key={medicine.id}>
-                      <Link to={`/medicines/${medicine.id}`} className="search-result-card">
-                        <div className="result-top">
-                          <span className="result-name">{medicine.name}</span>
-                        </div>
-                        <div className="result-meta">Manufacturer: {medicine.manufacturer}</div>
+                      <Link
+                        to={`/medicines/${medicine.id}`}
+                        className="hk-card"
+                        style={{ display: "block", borderRadius: 14, padding: "12px 16px", color: "#1A1A2E" }}
+                      >
+                        <div style={{ fontWeight: 700, fontSize: 14.5 }}>{medicine.name}</div>
+                        <div style={{ fontSize: 12.5, color: "#1A1A2E77" }}>Manufacturer: {medicine.manufacturer}</div>
                       </Link>
                     </li>
                   ))}
                 </ul>
               )}
-              <Link to="/search">Open full search page</Link>
+              <p style={{ marginTop: 10 }}>
+                <Link to="/search" style={{ fontSize: 13.5, fontWeight: 600, color: "#103c1c" }}>Open full search page</Link>
+              </p>
             </div>
 
-            {fileScanError && <p className="page-status error">{fileScanError}</p>}
-            {(isScanning || isFileScanning) && <p className="page-status">Verifying...</p>}
-            {scanError && <p className="page-status error">{scanError}</p>}
+            {fileScanError && <p style={{ color: "#b91c1c", fontSize: 13.5, textAlign: "center", marginTop: 14 }}>{fileScanError}</p>}
+            {(isScanning || isFileScanning) && <p style={{ textAlign: "center", fontSize: 13.5, color: "#1A1A2E88", marginTop: 14 }}>Verifying...</p>}
+            {scanError && <p style={{ color: "#b91c1c", fontSize: 13.5, textAlign: "center", marginTop: 14 }}>{scanError}</p>}
 
             {scanResult && !scanResult.medicine && (
-              <div className="scan-card unverified">
-                <h2>UNVERIFIED</h2>
-                <p>{scanResult.message ?? "This barcode does not exist in the Hakikisha database."}</p>
-                <p>This does NOT necessarily mean the medicine is counterfeit.</p>
-                <p>Please verify with the manufacturer or pharmacy.</p>
-                <p className="page-link-row">
-                  <Link to="/report" state={{ scanId: scanResult.scanId }}>
-                    Report this as counterfeit
-                  </Link>
+              <div
+                style={{
+                  marginTop: 22,
+                  borderRadius: 20,
+                  padding: "22px 26px",
+                  background: "#ff6b6b1a",
+                  border: "1.5px solid #ff6b6b55",
+                }}
+              >
+                <h2 style={{ margin: "0 0 8px", fontSize: 18, color: "#b8862f", fontFamily: "'Manrope', sans-serif" }}>UNVERIFIED</h2>
+                <p style={{ margin: "0 0 8px", fontSize: 14, color: "#1A1A2E" }}>
+                  {scanResult.message ?? "This barcode does not exist in the Hakikisha database."}
                 </p>
+                <p style={{ margin: "0 0 4px", fontSize: 13, color: "#1A1A2E88" }}>This does NOT necessarily mean the medicine is counterfeit.</p>
+                <p style={{ margin: "0 0 14px", fontSize: 13, color: "#1A1A2E88" }}>Please verify with the manufacturer or pharmacy.</p>
+                <Link to="/report" state={{ scanId: scanResult.scanId }} style={{ fontSize: 13.5, fontWeight: 700, color: "#103c1c" }}>
+                  Report this as counterfeit
+                </Link>
               </div>
             )}
-          </>
+          </div>
         )}
 
         {step === "identified" && scanResult?.medicine && (
-          <div className={`scan-card ${scanResult.status === "VERIFIED" ? "verified" : "unverified"}`}>
-            <h2>{scanResult.status === "VERIFIED" ? "✓ VERIFIED" : "⚠ UNVERIFIED"}</h2>
-            {scanResult.message && <p>{scanResult.message}</p>}
-            <div className="detail-grid">
-              <div className="detail-item">
-                <span className="detail-label">Name</span>
-                <span className="detail-value">{scanResult.medicine.name}</span>
+          <div style={{ ...panelStyle, maxWidth: 720 }}>
+            <div
+              style={{
+                borderRadius: 20,
+                padding: "20px 26px",
+                display: "flex",
+                alignItems: "center",
+                gap: 18,
+                background: bannerBg,
+                border: `1.5px solid ${bannerBorder}`,
+                marginBottom: 22,
+              }}
+            >
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: "50%",
+                  background: isVerified ? "#5fbf7d" : "#ff6b6b",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <span style={{ fontSize: 22, color: "#FDFBF7" }}>{isVerified ? "✓" : "!"}</span>
               </div>
-              <div className="detail-item">
-                <span className="detail-label">Manufacturer</span>
-                <span className="detail-value">{scanResult.medicine.manufacturer}</span>
-              </div>
-              <div className="detail-item">
-                <span className="detail-label">Batch</span>
-                <span className="detail-value">{scanResult.batchNumber ?? "Not listed"}</span>
-              </div>
-              <div className="detail-item">
-                <span className="detail-label">Expiry date</span>
-                <span className="detail-value">
-                  {scanResult.expiryDate ? new Date(scanResult.expiryDate).toLocaleDateString() : "Not listed"}
-                </span>
-              </div>
-              <div className="detail-item">
-                <span className="detail-label">Approval status</span>
-                <span className="detail-value">{scanResult.medicine.approvalStatus}</span>
+              <div>
+                <div style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 800, fontSize: 19, color: bannerColor }}>
+                  {isVerified ? "VERIFIED" : "UNVERIFIED"}
+                </div>
+                <div style={{ fontSize: 13, color: "#1A1A2E88" }}>Checked against the local Hakikisha registry</div>
               </div>
             </div>
-            <p className="page-link-row">
-              <button type="button" onClick={goToPhotos}>
+            {scanResult.message && <p style={{ fontSize: 13.5, color: "#1A1A2E88", marginTop: -12, marginBottom: 18 }}>{scanResult.message}</p>}
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14, marginBottom: 24 }}>
+              {[
+                { label: "Name", value: scanResult.medicine.name },
+                { label: "Manufacturer", value: scanResult.medicine.manufacturer },
+                { label: "Batch", value: scanResult.batchNumber ?? "Not listed" },
+                { label: "Expiry date", value: scanResult.expiryDate ? new Date(scanResult.expiryDate).toLocaleDateString() : "Not listed" },
+                { label: "Approval status", value: scanResult.medicine.approvalStatus },
+              ].map((item) => (
+                <div key={item.label} className="hk-neu-panel" style={{ borderRadius: 16, padding: 16 }}>
+                  <div style={{ fontSize: 11, color: "#1A1A2E66", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>
+                    {item.label}
+                  </div>
+                  <div style={{ fontSize: 14, color: "#1A1A2E", fontWeight: 600 }}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+              <button type="button" onClick={goToPhotos} className="hk-neu-btn" style={primaryButtonStyle}>
                 Continue to reference photos
-              </button>{" "}
-              <Link to={`/medicines/${scanResult.medicine.id}`}>View full details</Link>{" "}
-              <Link to="/report" state={{ scanId: scanResult.scanId, productName: scanResult.medicine.name }}>
+              </button>
+              <Link
+                to={`/medicines/${scanResult.medicine.id}`}
+                style={{ padding: "13px 24px", borderRadius: 999, border: "1.5px solid #1A1A2E22", fontSize: 14, fontWeight: 700, color: "#1A1A2E" }}
+              >
+                View full details
+              </Link>
+              <Link
+                to="/report"
+                state={{ scanId: scanResult.scanId, productName: scanResult.medicine.name }}
+                style={{ padding: "13px 24px", borderRadius: 999, border: "1.5px solid #ff6b6b55", background: "#ff6b6b12", fontSize: 14, fontWeight: 700, color: "#c23a3a" }}
+              >
                 Report this as counterfeit
               </Link>
-            </p>
+            </div>
           </div>
         )}
 
         {step === "photos" && (
-          <div className="barcode-result">
-            <h2>Reference photos</h2>
-            {profileLoading && <p className="page-status">Loading reference photos...</p>}
-            {profileError && <p className="page-status error">{profileError}</p>}
+          <div style={panelStyle}>
+            <h2 style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 19, color: "#1A1A2E", margin: "0 0 18px" }}>
+              Reference photos
+            </h2>
+            {profileLoading && <p style={{ fontSize: 13.5, color: "#1A1A2E88" }}>Loading reference photos...</p>}
+            {profileError && <p style={{ color: "#b91c1c", fontSize: 13.5 }}>{profileError}</p>}
             {profile && (
-              <div className="photo-grid">
-                <div className="photo-card">
-                  <span className="detail-label">Front</span>
-                  {profile.photos.front ? (
-                    <img src={profile.photos.front} alt={`${profile.medicine.name} front packaging`} />
-                  ) : (
-                    <p className="page-status">No front photo available.</p>
-                  )}
-                </div>
-                <div className="photo-card">
-                  <span className="detail-label">Back</span>
-                  {profile.photos.back ? (
-                    <img src={profile.photos.back} alt={`${profile.medicine.name} back packaging`} />
-                  ) : (
-                    <p className="page-status">No back photo available.</p>
-                  )}
-                </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 22 }}>
+                {(["front", "back"] as const).map((angle) => (
+                  <div key={angle} className="hk-neu-panel" style={{ borderRadius: 16, padding: 14, textAlign: "center" }}>
+                    <div style={{ fontSize: 12, color: "#1A1A2E66", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                      {angle === "front" ? "Front" : "Back"}
+                    </div>
+                    {profile.photos[angle] ? (
+                      <img
+                        src={profile.photos[angle] as string}
+                        alt={`${profile.medicine.name} ${angle} packaging`}
+                        style={{ width: "100%", height: "auto", borderRadius: 10 }}
+                      />
+                    ) : (
+                      <p style={{ fontSize: 13, color: "#1A1A2E88" }}>No {angle} photo available.</p>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
-            <p className="page-link-row">
-              <button type="button" onClick={() => setStep("package")}>
-                Continue to package verification
-              </button>
-            </p>
+            <button type="button" onClick={() => setStep("package")} className="hk-neu-btn" style={primaryButtonStyle}>
+              Continue to package verification
+            </button>
           </div>
         )}
 
         {step === "package" && (
-          <div className="barcode-result">
-            <h2>How to Identify a Genuine Package</h2>
+          <div style={panelStyle}>
+            <h2 style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 19, color: "#1A1A2E", margin: "0 0 18px" }}>
+              How to Identify a Genuine Package
+            </h2>
             {profile && profile.packageVerification.length > 0 ? (
-              <ul className="checklist">
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 22 }}>
                 {profile.packageVerification.map((label) => (
-                  <li key={label} className="checklist-item">
-                    <span className="checklist-mark">&#10003;</span>
-                    {label}
-                  </li>
+                  <div key={label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: "50%",
+                        background: "#5fbf7d",
+                        color: "#0c2f16",
+                        fontSize: 12,
+                        fontWeight: 800,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                    >
+                      ✓
+                    </span>
+                    <span style={{ fontSize: 14, color: "#1A1A2E" }}>{label}</span>
+                  </div>
                 ))}
-              </ul>
+              </div>
             ) : (
-              <p className="page-status">No package verification guidance available for this medicine yet.</p>
+              <p style={{ fontSize: 13.5, color: "#1A1A2E88" }}>No package verification guidance available for this medicine yet.</p>
             )}
-            <p className="page-link-row">
-              <button type="button" onClick={() => setStep("safety")}>
-                Continue to safety information
-              </button>
-            </p>
+            <button type="button" onClick={() => setStep("safety")} className="hk-neu-btn" style={primaryButtonStyle}>
+              Continue to safety information
+            </button>
           </div>
         )}
 
         {step === "safety" && (
-          <div className="barcode-result">
-            <h2>Things to Compare</h2>
+          <div style={panelStyle}>
+            <h2 style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 19, color: "#1A1A2E", margin: "0 0 18px" }}>
+              Things to Compare
+            </h2>
             {profile && profile.safetyComparison.length > 0 ? (
-              <ul className="checklist">
+              <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 22 }}>
                 {profile.safetyComparison.map((label) => (
-                  <li key={label} className="checklist-item">
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={!!comparisonChecks[label]}
-                        onChange={() => toggleComparisonCheck(label)}
-                      />
-                      {label}
-                    </label>
-                  </li>
+                  <label key={label} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={!!comparisonChecks[label]}
+                      onChange={() => toggleComparisonCheck(label)}
+                      style={{ width: 18, height: 18, accentColor: "#103c1c", flexShrink: 0 }}
+                    />
+                    <span style={{ fontSize: 14, color: "#1A1A2E" }}>{label}</span>
+                  </label>
                 ))}
-              </ul>
+              </div>
             ) : (
-              <p className="page-status">No comparison points available for this medicine yet.</p>
+              <p style={{ fontSize: 13.5, color: "#1A1A2E88" }}>No comparison points available for this medicine yet.</p>
             )}
-            <p className="page-link-row">
-              <button type="button" onClick={goToPharmacyStep}>
-                Continue to nearby pharmacy
-              </button>
-            </p>
+            <button type="button" onClick={goToPharmacyStep} className="hk-neu-btn" style={primaryButtonStyle}>
+              Continue to nearby pharmacy
+            </button>
           </div>
         )}
 
         {step === "pharmacy" && (
-          <div className="barcode-result">
-            <h2>Nearby pharmacy</h2>
-            {pharmacyStatus === "loading" && <p className="page-status">Finding nearby pharmacies...</p>}
+          <div style={{ ...panelStyle, maxWidth: 720 }}>
+            <h2 style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 19, color: "#1A1A2E", margin: "0 0 18px" }}>
+              Nearby pharmacy
+            </h2>
+            {pharmacyStatus === "loading" && <p style={{ fontSize: 13.5, color: "#1A1A2E88" }}>Finding nearby pharmacies...</p>}
             {pharmacyStatus === "error" && (
               <>
-                <p className="page-status error">{pharmacyError}</p>
-                <button type="button" onClick={findNearbyPharmacies}>
+                <p style={{ color: "#b91c1c", fontSize: 13.5 }}>{pharmacyError}</p>
+                <button type="button" onClick={findNearbyPharmacies} className="hk-neu-btn" style={{ ...primaryButtonStyle, marginBottom: 18 }}>
                   Try again
                 </button>
               </>
             )}
             {pharmacyStatus === "success" && pharmacies && pharmacies.length === 0 && (
-              <p className="page-status">No pharmacies found near you.</p>
+              <p style={{ fontSize: 13.5, color: "#1A1A2E88" }}>No pharmacies found near you.</p>
             )}
             {pharmacyStatus === "success" && pharmacies && pharmacies.length > 0 && (
               <>
                 {userCoords && <PharmacyMap center={userCoords} pharmacies={pharmacies} />}
-                <ul className="result-list">
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, margin: "16px 0 22px" }}>
                   {pharmacies.map((pharmacy) => (
-                    <li key={pharmacy.id} className="pharmacy-card">
-                      <div className="result-top">
-                        <span className="result-name">{pharmacy.name}</span>
-                        <span>{pharmacy.distanceKm} km</span>
+                    <div key={pharmacy.id} className="hk-card" style={{ borderRadius: 18, padding: "16px 20px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                        <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 14.5, color: "#1A1A2E" }}>
+                          {pharmacy.name}
+                        </span>
+                        <span style={{ fontSize: 13, color: "#1A1A2E77" }}>{pharmacy.distanceKm} km</span>
                       </div>
                       {pharmacy.stocksMedicine && (
-                        <span className="stock-badge">Confirmed in stock</span>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            marginTop: 6,
+                            padding: "2px 10px",
+                            borderRadius: 999,
+                            background: "#5fbf7d22",
+                            color: "#2f8f52",
+                            fontSize: 12,
+                            fontWeight: 600,
+                          }}
+                        >
+                          Confirmed in stock
+                        </span>
                       )}
-                      <div className="result-meta">{pharmacy.address}</div>
-                      {pharmacy.phone && <div className="result-meta">{pharmacy.phone}</div>}
-                    </li>
+                      <div style={{ fontSize: 13, color: "#1A1A2E77", marginTop: 6 }}>{pharmacy.address}</div>
+                      {pharmacy.phone && <div style={{ fontSize: 13, color: "#1A1A2E77" }}>{pharmacy.phone}</div>}
+                    </div>
                   ))}
-                </ul>
+                </div>
               </>
             )}
-            <p className="page-link-row">
-              <button type="button" onClick={resetFlow}>
-                Scan another barcode
-              </button>
-            </p>
+            <button type="button" onClick={resetFlow} className="hk-neu-btn" style={primaryButtonStyle}>
+              Scan another barcode
+            </button>
           </div>
         )}
 
-        <p className="page-link-row">
-          <Link to="/">Back to home</Link>
+        <p style={{ textAlign: "center", marginTop: 28 }}>
+          <Link to="/" style={{ fontSize: 13.5, fontWeight: 600, color: "#3e4440", textDecoration: "underline" }}>
+            Back to home
+          </Link>
         </p>
-      </section>
-    </main>
+      </div>
+    </div>
   );
 }

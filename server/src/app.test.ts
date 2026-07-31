@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
+import bcrypt from "bcryptjs";
+
+// app.ts is imported directly below (bypassing index.ts's dotenv.config()),
+// so JWT_SECRET wouldn't otherwise exist in this process — needed for the
+// Login test, which exercises signAccessToken for real. CI sets this via
+// its own env var; this is the equivalent for local `npm test` runs.
+process.env.JWT_SECRET ??= "test_secret_not_real";
 
 const { mockQuery } = vi.hoisted(() => ({
   mockQuery: vi.fn(),
@@ -78,5 +85,45 @@ describe("Email verification", () => {
       expect.stringContaining("INSERT INTO users"),
       ["newuser@example.com", expect.any(String), "Jane Doe", "Kenya", "consumer"]
     );
+  });
+});
+
+describe("Login", () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+  });
+
+  it("sets httpOnly auth cookies and returns no tokens in the response body", async () => {
+    const passwordHash = await bcrypt.hash("password123", 12);
+    mockQuery
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: "user-1",
+            email: "jane@example.com",
+            password_hash: passwordHash,
+            full_name: "Jane Doe",
+            country: "Kenya",
+            role: "consumer",
+            is_verified: true,
+            created_at: "2026-07-20T00:00:00.000Z",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] }); // INSERT INTO refresh_tokens
+
+    const res = await request(app)
+      .post("/api/auth/login")
+      .send({ email: "jane@example.com", password: "password123", remember: true });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ user: expect.objectContaining({ email: "jane@example.com" }) });
+    expect(res.body.accessToken).toBeUndefined();
+    expect(res.body.refreshToken).toBeUndefined();
+
+    const cookies = res.headers["set-cookie"] as unknown as string[];
+    expect(cookies.some((c) => c.startsWith("hakikisha_access_token=") && /HttpOnly/i.test(c))).toBe(true);
+    expect(cookies.some((c) => c.startsWith("hakikisha_refresh_token=") && /HttpOnly/i.test(c))).toBe(true);
+    expect(cookies.some((c) => c.startsWith("hakikisha_csrf_token=") && !/HttpOnly/i.test(c))).toBe(true);
   });
 });

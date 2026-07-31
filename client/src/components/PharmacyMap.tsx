@@ -23,12 +23,17 @@ function googleMapsDirectionsUrl(lat: number, lng: number): string {
 interface PharmacyMapProps {
   center: { lat: number; lng: number };
   pharmacies: NearbyPharmacy[];
+  // Off by default since most usages embed the map inside an otherwise
+  // scrollable page (trapping the scroll wheel there would be annoying) —
+  // the standalone Pharmacy Map page, where the map IS the page, turns it on.
+  scrollWheelZoom?: boolean;
+  className?: string;
 }
 
-export default function PharmacyMap({ center, pharmacies }: PharmacyMapProps) {
+export default function PharmacyMap({ center, pharmacies, scrollWheelZoom = false, className }: PharmacyMapProps) {
   return (
-    <div className="pharmacy-map">
-      <MapContainer center={[center.lat, center.lng]} zoom={13} scrollWheelZoom={false}>
+    <div className={className ?? "pharmacy-map"}>
+      <MapContainer center={[center.lat, center.lng]} zoom={13} scrollWheelZoom={scrollWheelZoom}>
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

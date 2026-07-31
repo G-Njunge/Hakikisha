@@ -128,6 +128,10 @@ CREATE TABLE pharmacies (
     latitude DOUBLE PRECISION NOT NULL,
     longitude DOUBLE PRECISION NOT NULL,
     phone VARCHAR(50),
+    -- Free-text opening hours (e.g. "Mon-Sat 8am-8pm"). Nullable — not yet
+    -- populated for any seeded pharmacy; the Pharmacy Map UI shows
+    -- "Not listed" until real data is supplied.
+    hours VARCHAR(100),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (name, address)
 );
@@ -160,6 +164,10 @@ CREATE TABLE refresh_tokens (
     token_hash VARCHAR(64) NOT NULL UNIQUE,
     expires_at TIMESTAMPTZ NOT NULL,
     revoked_at TIMESTAMPTZ,
+    -- "Remember me" from login, carried forward on every rotation, so a
+    -- refresh (which doesn't know the original login form choice) can
+    -- re-issue a persistent vs. session cookie correctly.
+    remember BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

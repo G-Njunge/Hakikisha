@@ -1,5 +1,4 @@
 import apiClient from "./client";
-import { clearTokens, getRefreshToken, setTokens } from "./tokenStorage";
 import type { LoginPayload, RegisterPayload, User } from "../types/auth";
 
 export async function register(payload: RegisterPayload): Promise<User> {
@@ -7,26 +6,15 @@ export async function register(payload: RegisterPayload): Promise<User> {
   return data.user;
 }
 
-export async function login(payload: LoginPayload): Promise<User> {
-  const { data } = await apiClient.post<{ accessToken: string; refreshToken: string; user: User }>(
-    "/api/auth/login",
-    payload
-  );
-  setTokens(data.accessToken, data.refreshToken);
+export async function login(payload: LoginPayload, remember: boolean): Promise<User> {
+  const { data } = await apiClient.post<{ user: User }>("/api/auth/login", { ...payload, remember });
   return data.user;
 }
 
 export async function logout(): Promise<void> {
-  const refreshToken = getRefreshToken();
-
-  try {
-    await apiClient.post("/api/auth/logout", refreshToken ? { refreshToken } : {});
-  } finally {
-    // Always end the local session, even if the network call failed
-    // (offline, server down) — the user asked to log out, so they must
-    // re-enter credentials regardless of whether the server heard about it.
-    clearTokens();
-  }
+  // The server reads its own refresh cookie and clears all three auth
+  // cookies in the response — nothing client-side left to clean up.
+  await apiClient.post("/api/auth/logout");
 }
 
 export async function fetchCurrentUser(): Promise<User> {

@@ -15,6 +15,7 @@ interface PharmacyRow {
   latitude: number;
   longitude: number;
   phone: string | null;
+  hours: string | null;
   distance_km: number;
   stocks_medicine: boolean | null;
 }
@@ -49,7 +50,7 @@ router.get("/nearby", async (req, res) => {
   const { rows } = await pool.query<PharmacyRow>(
     `SELECT *, distance_km FROM (
        SELECT
-         p.id, p.name, p.address, p.latitude, p.longitude, p.phone,
+         p.id, p.name, p.address, p.latitude, p.longitude, p.phone, p.hours,
          $3 * 2 * asin(sqrt(
            power(sin(radians(($1 - p.latitude) / 2)), 2) +
            cos(radians($1)) * cos(radians(p.latitude)) *
@@ -65,7 +66,7 @@ router.get("/nearby", async (req, res) => {
      ) AS with_distance
      WHERE distance_km <= $4
      ORDER BY stocks_medicine DESC NULLS LAST, distance_km ASC
-     LIMIT 20`,
+     LIMIT 100`,
     [lat, lng, EARTH_RADIUS_KM, radiusKm, medicineId ?? null]
   );
 
@@ -77,6 +78,7 @@ router.get("/nearby", async (req, res) => {
       latitude: row.latitude,
       longitude: row.longitude,
       phone: row.phone,
+      hours: row.hours,
       distanceKm: Math.round(row.distance_km * 10) / 10,
       stocksMedicine: row.stocks_medicine,
     })),

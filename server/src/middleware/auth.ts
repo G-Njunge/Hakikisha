@@ -1,17 +1,17 @@
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import pool from "../db/pool";
+import { ACCESS_COOKIE } from "../lib/cookies";
 
 // Returns the verified payload, or null if the token is missing/invalid/
-// expired/revoked. Shared by `authenticate` (rejects on null) and
-// `optionalAuthenticate` (proceeds anonymously on null).
-async function verifyAccessToken(req: Request): Promise<Request["user"] | null> {
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Bearer ")) {
+// expired/revoked. Shared by `authenticate` (rejects on null),
+// `optionalAuthenticate` (proceeds anonymously on null), and the rate
+// limiter (to bucket by user vs. IP).
+export async function verifyAccessToken(req: Request): Promise<Request["user"] | null> {
+  const token = req.cookies?.[ACCESS_COOKIE];
+  if (typeof token !== "string" || token.length === 0) {
     return null;
   }
-
-  const token = header.slice("Bearer ".length);
 
   let payload: jwt.JwtPayload;
   try {

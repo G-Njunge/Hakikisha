@@ -9,6 +9,8 @@ import MedicineDetailPage from "./pages/MedicineDetailPage";
 import ReportCounterfeitPage from "./pages/ReportCounterfeitPage";
 import AdminReportsPage from "./pages/AdminReportsPage";
 import DashboardPage from "./pages/DashboardPage";
+import PharmacyMapPage from "./pages/PharmacyMapPage";
+import LogoutPage from "./pages/LogoutPage";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
@@ -49,6 +51,17 @@ function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/pharmacy"
+        element={
+          <ProtectedRoute>
+            <PharmacyMapPage />
+          </ProtectedRoute>
+        }
+      />
+      {/* Not gated by ProtectedRoute — it must still render its confirm/done
+          states even if a session already expired by the time it's opened. */}
+      <Route path="/logout" element={<LogoutPage />} />
     </Routes>
   );
 }

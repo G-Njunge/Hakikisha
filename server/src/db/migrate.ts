@@ -160,6 +160,12 @@ async function main() {
     )`
   );
 
+  // --- pharmacies.hours (free-text opening hours, e.g. "Mon-Sat 8am-8pm") ---
+  await run(
+    "ALTER TABLE pharmacies ADD COLUMN hours",
+    `ALTER TABLE pharmacies ADD COLUMN IF NOT EXISTS hours VARCHAR(100)`
+  );
+
   // --- medicines.barcode: widen 13-digit-only check to 8-13 digits ---
   // (lets a scanned/uploaded QR code that decodes to fewer than 13 digits be
   // stored as-is, matching the API's own /^\d{8,13}$/ validation). This is a
@@ -168,6 +174,12 @@ async function main() {
   await pool.query(`ALTER TABLE medicines DROP CONSTRAINT IF EXISTS medicines_barcode_check`);
   await pool.query(`ALTER TABLE medicines ADD CONSTRAINT medicines_barcode_check CHECK (barcode ~ '^[0-9]{8,13}$')`);
   console.log("OK    ALTER TABLE medicines: widened medicines_barcode_check to 8-13 digits");
+
+  // --- refresh_tokens.remember ("remember me" carried through rotation) ---
+  await run(
+    "ALTER TABLE refresh_tokens ADD COLUMN remember",
+    `ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS remember BOOLEAN NOT NULL DEFAULT false`
+  );
 
   console.log("\nMigration complete.");
   await pool.end();

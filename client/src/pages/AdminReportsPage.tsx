@@ -30,12 +30,24 @@ export default function AdminReportsPage() {
 
   const isAdmin = user?.role === "admin";
 
+  // Resets isLoading/loadError during render when (isAdmin, page) changes,
+  // rather than via a synchronous setState at the top of the effect below —
+  // React's recommended pattern for adjusting state in response to a
+  // prop/state change instead of an Effect.
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const currentKey = `${isAdmin}:${page}`;
+  if (loadedKey !== currentKey) {
+    setLoadedKey(currentKey);
+    if (isAdmin) {
+      setIsLoading(true);
+      setLoadError(null);
+    }
+  }
+
   useEffect(() => {
     if (!isAdmin) return;
 
     let cancelled = false;
-    setIsLoading(true);
-    setLoadError(null);
 
     getAllReports(page)
       .then((result) => {

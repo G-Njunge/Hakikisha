@@ -1,10 +1,20 @@
 import axios from "axios";
 import type { AxiosError, InternalAxiosRequestConfig } from "axios";
-import { SESSION_EXPIRED_EVENT, clearTokens, getAccessToken, getRefreshToken, setTokens } from "./tokenStorage";
+import { getCsrfToken } from "./csrf";
 
 const baseURL = import.meta.env.VITE_API_URL ?? "http://localhost:5000";
 
-const apiClient = axios.create({ baseURL });
+// Fired when a background token refresh fails (session truly expired), as
+// opposed to an explicit user-initiated logout. AuthContext listens for this
+// so its `user` state doesn't go stale — without it, the UI would keep
+// showing a logged-in user whose every request now 401s.
+export const SESSION_EXPIRED_EVENT = "hakikisha:session-expired";
+
+const MUTATING_METHODS = new Set(["post", "put", "patch", "delete"]);
+
+// withCredentials so the browser attaches the httpOnly auth cookies (and
+// receives new Set-Cookie headers) on every cross-origin request.
+const apiClient = axios.create({ baseURL, withCredentials: true });
 
 const AUTH_ENDPOINTS = ["/api/auth/login", "/api/auth/register"];
 
@@ -13,49 +23,28 @@ function isAuthEndpoint(url?: string): boolean {
 }
 
 apiClient.interceptors.request.use((config) => {
-  const accessToken = getAccessToken();
-  if (accessToken) {
-    config.headers.Authorization = `Bearer ${accessToken}`;
+  if (config.method && MUTATING_METHODS.has(config.method)) {
+    const csrfToken = getCsrfToken();
+    if (csrfToken) {
+      config.headers["X-CSRF-Token"] = csrfToken;
+    }
   }
   return config;
 });
 
-async function performRefresh(): Promise<string> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) {
-    throw new Error("No refresh token available");
-  }
-
-  try {
-    // Plain axios, not apiClient, so this call bypasses the response
-    // interceptor below and can't recursively trigger another refresh.
-    const { data } = await axios.post<{ accessToken: string; refreshToken: string }>(
-      `${baseURL}/api/auth/refresh`,
-      { refreshToken }
-    );
-    setTokens(data.accessToken, data.refreshToken);
-    return data.accessToken;
-  } catch (err) {
-    // Refresh tokens are single-use. If another tab (sharing this origin's
-    // localStorage) already rotated this exact token while we were mid-flight,
-    // our attempt fails but the session is still alive under their new token
-    // — adopt it instead of forcing a needless logout.
-    const currentRefreshToken = getRefreshToken();
-    const currentAccessToken = getAccessToken();
-    if (currentAccessToken && currentRefreshToken && currentRefreshToken !== refreshToken) {
-      return currentAccessToken;
-    }
-    throw err;
-  }
+async function performRefresh(): Promise<void> {
+  // Plain axios, not apiClient, so this call bypasses the response
+  // interceptor below and can't recursively trigger another refresh.
+  await axios.post(`${baseURL}/api/auth/refresh`, {}, { withCredentials: true });
 }
 
 // Refresh tokens rotate on every use, so concurrent refreshes must not race
 // each other. Web Locks serializes refreshes across every tab sharing this
-// origin's localStorage; the in-memory promise is the same-tab fallback for
+// origin's cookies; the in-memory promise is the same-tab fallback for
 // browsers without Web Locks support.
-let refreshPromise: Promise<string> | null = null;
+let refreshPromise: Promise<void> | null = null;
 
-function refreshAccessToken(): Promise<string> {
+function refreshSession(): Promise<void> {
   if (typeof navigator !== "undefined" && "locks" in navigator) {
     return navigator.locks.request("hakikisha-token-refresh", () => performRefresh());
   }
@@ -88,11 +77,12 @@ apiClient.interceptors.response.use(
     originalRequest._retried = true;
 
     try {
-      const newAccessToken = await refreshAccessToken();
-      originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+      await refreshSession();
+      // The refreshed access + CSRF cookies are picked up automatically:
+      // the browser resends the access cookie, and the request interceptor
+      // re-reads the (now-rotated) CSRF cookie when this retry re-runs it.
       return apiClient(originalRequest);
     } catch (refreshError) {
-      clearTokens();
       window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
       return Promise.reject(refreshError);
     }

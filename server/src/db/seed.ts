@@ -187,11 +187,15 @@ interface HealthAuthoritySeed {
 
 // Demo addresses only — hakikisha-demo.com isn't a real registered domain, so
 // these are for exercising the report-alert flow, not actual delivery.
+// Rwanda is the exception: routed to the developer's own Resend-verified
+// address so report-alert emails can actually be received end-to-end while
+// this account is on Resend's sandbox sending tier (which only delivers to
+// the account owner's own address).
 const healthAuthorities: HealthAuthoritySeed[] = [
   { country: "Nigeria", authorityName: "NAFDAC", email: "nafdac@hakikisha-demo.com" },
   { country: "Kenya", authorityName: "KEBS", email: "kebs@hakikisha-demo.com" },
   { country: "South Africa", authorityName: "SAHPRA", email: "sahpra@hakikisha-demo.com" },
-  { country: "Rwanda", authorityName: "Rwanda FDA", email: "rwandafda@hakikisha-demo.com" },
+  { country: "Rwanda", authorityName: "Rwanda FDA", email: "g.njunge@alustudent.com" },
   { country: "Ghana", authorityName: "FDA Ghana", email: "fdaghana@hakikisha-demo.com" },
 ];
 

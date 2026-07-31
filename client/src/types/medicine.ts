@@ -53,6 +53,7 @@ export interface NearbyPharmacy {
   latitude: number;
   longitude: number;
   phone: string | null;
+  hours: string | null;
   distanceKm: number;
   // null when no medicineId was passed to the nearby-pharmacies request —
   // otherwise a flag (not a filter) for whether stock is on file, sorted first.
