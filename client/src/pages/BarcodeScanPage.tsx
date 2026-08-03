@@ -265,17 +265,14 @@ export default function BarcodeScanPage() {
   if (tipResetForActive !== isCameraActive) {
     setTipResetForActive(isCameraActive);
     setShowScanningTip(false);
-  }
-
-  // Only resets on activation (not deactivation) — a timeout deliberately
-  // turns isCameraActive off while leaving scanTimedOut true, so the failure
-  // message stays visible until the user tries again.
-  useEffect(() => {
+    // Only reset on activation (not deactivation) — a timeout deliberately
+    // turns isCameraActive off while leaving scanTimedOut true, so the
+    // failure message stays visible until the user tries again.
     if (isCameraActive) {
       setScanTimedOut(false);
       setScanElapsedSeconds(0);
     }
-  }, [isCameraActive]);
+  }
 
   useEffect(() => {
     if (!isCameraActive) return;
@@ -325,7 +322,7 @@ export default function BarcodeScanPage() {
     }
 
     if (!BARCODE_PATTERN.test(trimmed)) {
-      setScanError("That doesn't look like a valid barcode (must be 8-13 digits).");
+      setScanError("That doesn't look like a valid barcode. Please check the number and try again.");
       setScanResult(null);
       return;
     }
@@ -344,11 +341,11 @@ export default function BarcodeScanPage() {
       console.error("Barcode scan failed", err);
       if (isAxiosError(err)) {
         if (err.response?.status === 400) {
-          setScanError("That doesn't look like a valid barcode (must be 8-13 digits).");
+          setScanError("That doesn't look like a valid barcode. Please check the number and try again.");
         } else if (err.response) {
           setScanError("Something went wrong verifying this code. Please try again in a moment.");
         } else {
-          setScanError("Network error — check your connection and try again.");
+          setScanError("We couldn't reach our servers. Please check your internet connection and try again.");
         }
       } else {
         setScanError("Unable to verify barcode. Please try again.");
@@ -462,7 +459,7 @@ export default function BarcodeScanPage() {
         } catch (err) {
           console.error("Failed to fetch nearby pharmacies", err);
           setPharmacyStatus("error");
-          setPharmacyError("Unable to fetch nearby pharmacies.");
+          setPharmacyError("We couldn't find nearby pharmacies. Please try again.");
         }
       },
       () => {

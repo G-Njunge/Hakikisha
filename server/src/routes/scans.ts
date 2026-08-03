@@ -45,7 +45,7 @@ router.post("/", optionalAuthenticate, async (req, res) => {
   const { barcode, lat, lng } = req.body ?? {};
 
   if (typeof barcode !== "string" || !/^\d{8,13}$/.test(barcode)) {
-    res.status(400).json({ error: "barcode must be an 8-13 digit numeric string" });
+    res.status(400).json({ error: "That doesn't look like a valid barcode. Please check the number and try again." });
     return;
   }
 

@@ -42,7 +42,7 @@ export default function LoginPage() {
     } catch (err) {
       const message =
         (err as { response?: { data?: { error?: string } } }).response?.data?.error ??
-        "Login failed";
+        "We couldn't log you in. Please check your email and password and try again.";
       setError(message);
     } finally {
       setIsSubmitting(false);
@@ -56,8 +56,10 @@ export default function LoginPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "20px 56px",
+          padding: "20px var(--hk-pad-x)",
           borderBottom: "1px solid #1A1A2E12",
+          flexWrap: "wrap",
+          gap: 12,
         }}
       >
         <Link
@@ -81,8 +83,8 @@ export default function LoginPage() {
         </div>
       </nav>
 
-      <div style={{ flex: 1, display: "flex", overflow: "hidden", background: "#E4E7ED" }}>
-        <div style={{ width: "42%", position: "relative", overflow: "hidden" }}>
+      <div className="hk-auth-split" style={{ flex: 1, display: "flex", overflow: "hidden", background: "#E4E7ED" }}>
+        <div className="hk-auth-image-panel" style={{ position: "relative", overflow: "hidden" }}>
           <img
             src="/assets/login-abstract.png"
             alt="Abstract geometric composition"
@@ -158,12 +160,7 @@ export default function LoginPage() {
               </label>
 
               <label style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingRight: 6 }}>
-                  <span style={fieldLabelStyle}>Password</span>
-                  <a href="#" onClick={(e) => e.preventDefault()} style={{ fontSize: 12.5, fontWeight: 600, color: "#1A1A2E88" }}>
-                    Forgot password?
-                  </a>
-                </div>
+                <span style={fieldLabelStyle}>Password</span>
                 <input
                   className="hk-neu-field"
                   type="password"

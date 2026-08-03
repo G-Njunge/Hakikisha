@@ -54,7 +54,7 @@ export default function MedicineDetailPage() {
         setState({
           status: "error",
           forId: id,
-          message: responseStatus === 404 ? "Medicine not found" : "Failed to load medicine",
+          message: responseStatus === 404 ? "We couldn't find that medicine." : "We couldn't load this medicine's details. Please try again.",
         });
       });
 
@@ -85,7 +85,7 @@ export default function MedicineDetailPage() {
         } catch (err) {
           console.error("Failed to fetch nearby pharmacies", err);
           setPharmacyStatus("error");
-          setPharmacyError("Unable to fetch nearby pharmacies.");
+          setPharmacyError("We couldn't find nearby pharmacies. Please try again.");
         }
       },
       () => {

@@ -165,7 +165,7 @@ export default function ReportCounterfeitPage() {
       if (isAxiosError(err) && err.response && err.response.status < 500) {
         setSubmitError((err.response.data as { error?: string })?.error ?? "Please check your report and try again.");
       } else if (isAxiosError(err) && !err.response) {
-        setSubmitError("Network error — check your connection and try again.");
+        setSubmitError("We couldn't reach our servers. Please check your internet connection and try again.");
       } else {
         setSubmitError("Something went wrong submitting your report. Please try again.");
       }

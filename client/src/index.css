@@ -50,12 +50,24 @@
   }
 }
 
+/* Without this, any element mixing a percentage/100% width with padding
+   (a pattern used throughout the "new design" pages' centered card panels —
+   Login, Register, Report, Logout, BarcodeScan's step panels, etc.) renders
+   wider than its container by the padding amount, since content-box (the
+   default) adds padding outside the specified width instead of inside it.
+   That's invisible at desktop widths where there's slack either way, but
+   causes real horizontal overflow/clipping on narrow phone screens. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 #root {
   width: 100%;
   min-height: 100svh;
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
 }
 
 body {

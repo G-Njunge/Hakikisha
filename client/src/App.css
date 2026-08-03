@@ -5,11 +5,6 @@
   0%, 100% { transform: translateY(0) rotate(var(--r, 0deg)); }
   50% { transform: translateY(-14px) rotate(var(--r, 0deg)); }
 }
-@keyframes hk-scan {
-  0%, 20% { top: 6%; }
-  45%, 55% { top: 88%; }
-  80%, 100% { top: 6%; }
-}
 @keyframes hk-pulsering {
   0% { box-shadow: 0 0 0 0 rgba(224, 122, 47, 0.35); }
   100% { box-shadow: 0 0 0 22px rgba(224, 122, 47, 0); }
@@ -37,10 +32,10 @@
 
 /* New design system (2026 refresh) — a distinct "hk-" prefixed set kept
    alongside the legacy classes below rather than restyling them in place,
-   because SearchPage/MedicineDetailPage/AdminReportsPage deliberately still
-   use the legacy classes and must render unchanged. Pages using the new look
-   (Landing, Login, Register, Home, BarcodeScan, Dashboard, Report, Pharmacy
-   Map, Logout) use these instead. */
+   because SearchPage/MedicineDetailPage deliberately still use the legacy
+   classes and must render unchanged. Pages using the new look (Landing,
+   Login, Register, Home, BarcodeScan, Dashboard, Report, Pharmacy Map,
+   Logout) use these instead. */
 @keyframes hk-scanline {
   0%, 15% { top: 8%; }
   50% { top: 88%; }
@@ -49,6 +44,141 @@
 @keyframes hk-pulse {
   0% { box-shadow: 0 0 0 0 rgba(16, 60, 28, 0.35); }
   100% { box-shadow: 0 0 0 18px rgba(16, 60, 28, 0); }
+}
+
+/* Responsive scale for the "new design" pages' outer section padding — used
+   via `padding: var(--hk-pad-y) var(--hk-pad-x)` in place of hardcoded 56px
+   values, so inline-style-heavy pages scale down at narrow widths without
+   each one needing its own media query. */
+:root {
+  --hk-pad-x: 56px;
+  --hk-pad-y: 40px;
+}
+@media (max-width: 860px) {
+  :root {
+    --hk-pad-x: 28px;
+    --hk-pad-y: 28px;
+  }
+}
+@media (max-width: 480px) {
+  :root {
+    --hk-pad-x: 16px;
+    --hk-pad-y: 20px;
+  }
+}
+
+.hk-nav {
+  padding: 14px var(--hk-pad-x);
+  flex-wrap: wrap;
+}
+.hk-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 34px;
+}
+.hk-nav-toggle {
+  display: none;
+}
+.hk-nav-mobile-panel {
+  display: none;
+}
+@media (max-width: 880px) {
+  .hk-nav-links {
+    display: none;
+  }
+  .hk-nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .hk-nav-mobile-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #FDFBF7;
+    border-bottom: 1px solid #1A1A2E12;
+    box-shadow: 0 16px 30px -18px rgba(16, 60, 28, 0.35);
+    padding: 20px var(--hk-pad-x) 26px;
+  }
+}
+
+.hk-nav-toggle-bars,
+.hk-nav-toggle-bars::before,
+.hk-nav-toggle-bars::after {
+  content: "";
+  display: block;
+  width: 18px;
+  height: 2px;
+  background: #1A1A2E;
+  border-radius: 2px;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+.hk-nav-toggle-bars {
+  position: relative;
+}
+.hk-nav-toggle-bars::before {
+  position: absolute;
+  top: -6px;
+  left: 0;
+}
+.hk-nav-toggle-bars::after {
+  position: absolute;
+  top: 6px;
+  left: 0;
+}
+.hk-nav-toggle-bars.open {
+  background: transparent;
+}
+.hk-nav-toggle-bars.open::before {
+  top: 0;
+  transform: rotate(45deg);
+}
+.hk-nav-toggle-bars.open::after {
+  top: 0;
+  transform: rotate(-45deg);
+}
+
+/* Reusable responsive grid collapses — the column *ratio* stays inline
+   (varies per page), these classes only override the column *count* below
+   a breakpoint. The 2-col variant needs !important since an inline
+   `gridTemplateColumns` otherwise always wins over an external stylesheet
+   rule regardless of specificity. */
+.hk-grid-12 {
+  grid-template-columns: repeat(12, 1fr);
+}
+.hk-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+@media (max-width: 900px) {
+  .hk-grid-12,
+  .hk-grid-2col {
+    grid-template-columns: 1fr !important;
+  }
+  .hk-grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 560px) {
+  .hk-grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Login/Register's side-by-side decorative-image + form layout — the image
+   panel is purely decorative, so it's dropped below a breakpoint rather than
+   squeezed, letting the form take the full width instead. */
+.hk-auth-image-panel {
+  width: 42%;
+}
+@media (max-width: 760px) {
+  .hk-auth-image-panel {
+    display: none;
+  }
 }
 
 .hk-neu-field {

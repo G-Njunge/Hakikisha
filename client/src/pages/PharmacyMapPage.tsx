@@ -117,7 +117,7 @@ export default function PharmacyMapPage() {
         if (cancelled) return;
         console.error("Failed to fetch nearby pharmacies", err);
         setStatus("error");
-        setError("Unable to fetch nearby pharmacies.");
+        setError("We couldn't find nearby pharmacies. Please try again.");
       });
 
     return () => {
@@ -177,7 +177,7 @@ export default function PharmacyMapPage() {
       />
       <AuthNav />
 
-      <section style={{ padding: "44px 56px 0", maxWidth: 1280, margin: "0 auto", position: "relative", zIndex: 1 }}>
+      <section style={{ padding: "44px var(--hk-pad-x) 0", maxWidth: 1280, margin: "0 auto", position: "relative", zIndex: 1 }}>
         <h1 style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 800, fontSize: 32, letterSpacing: "-0.01em", margin: "0 0 8px", color: "#1A1A2E" }}>
           Find a nearby pharmacy
         </h1>
@@ -277,7 +277,7 @@ export default function PharmacyMapPage() {
       </section>
 
       {status === "idle" && (
-        <section style={{ padding: "0 56px 70px", maxWidth: 1280, margin: "0 auto", position: "relative", zIndex: 1 }}>
+        <section style={{ padding: "0 var(--hk-pad-x) 70px", maxWidth: 1280, margin: "0 auto", position: "relative", zIndex: 1 }}>
           <div className="hk-card" style={{ borderRadius: 20, padding: 40, textAlign: "center", color: "#1A1A2E88", fontSize: 14.5 }}>
             Search a medicine above to see nearby pharmacies that stock it.
           </div>
@@ -286,8 +286,9 @@ export default function PharmacyMapPage() {
 
       {status !== "idle" && (
       <section
+        className="hk-grid-2col"
         style={{
-          padding: "0 56px 70px",
+          padding: "0 var(--hk-pad-x) 70px",
           maxWidth: 1280,
           margin: "0 auto",
           position: "relative",

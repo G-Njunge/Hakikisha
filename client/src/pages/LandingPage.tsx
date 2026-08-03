@@ -34,8 +34,9 @@ export default function LandingPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 32,
-          padding: "18px 56px",
+          gap: 20,
+          flexWrap: "wrap",
+          padding: "18px var(--hk-pad-x)",
           background: "#E4E7EDcc",
           backdropFilter: "blur(10px)",
           borderBottom: "1px solid #103c1c1a",
@@ -73,35 +74,32 @@ export default function LandingPage() {
         style={{
           position: "relative",
           overflow: "hidden",
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: 40,
-          alignItems: "start",
-          padding: "80px 56px 100px",
+          textAlign: "center",
+          padding: "48px clamp(20px, 4vw, 40px) 110px",
         }}
       >
-        <div style={{ position: "relative", zIndex: 1, maxWidth: 560 }}>
+        <div style={{ position: "relative", zIndex: 1, maxWidth: 980, margin: "0 auto" }}>
           <h1
             style={{
               fontFamily: "'Manrope', sans-serif",
               fontWeight: 900,
-              fontSize: 56,
-              lineHeight: 1.04,
+              fontSize: "clamp(49px, 7.8vw, 88px)",
+              lineHeight: 1.08,
               letterSpacing: "-0.02em",
-              margin: "0 0 22px",
+              margin: "0 0 26px",
               color: COLOR.green,
             }}
           >
             Know your medicine. Before you take it.
           </h1>
-          <p style={{ fontSize: 16, lineHeight: 1.65, color: COLOR.slate, maxWidth: 460, margin: "0 0 16px" }}>
+          <p style={{ fontSize: 22, lineHeight: 1.65, color: COLOR.slate, maxWidth: 820, margin: "0 auto 16px" }}>
             Hakikisha verifies packs against the official registry in seconds, flags counterfeit and
             substandard batches, and helps you find pharmacies you can trust.
           </p>
-          <p style={{ fontSize: 16, lineHeight: 1.65, color: COLOR.slate, maxWidth: 460, margin: "0 0 32px" }}>
+          <p style={{ fontSize: 22, lineHeight: 1.65, color: COLOR.slate, maxWidth: 820, margin: "0 auto 36px" }}>
             Scan a barcode, enter a code by hand, or search by name in seconds.
           </p>
-          <div style={{ display: "flex", gap: 16 }}>
+          <div style={{ display: "flex", justifyContent: "center" }}>
             <Link
               to="/register"
               className="hk-btn"
@@ -111,59 +109,10 @@ export default function LandingPage() {
             </Link>
           </div>
         </div>
-
-        <div style={{ position: "relative", zIndex: 1, height: 460, display: "flex", alignItems: "flex-start", justifyContent: "center" }}>
-          <div
-            style={{
-              position: "relative",
-              zIndex: 2,
-              width: 230,
-              height: 460,
-              borderRadius: 38,
-              background: COLOR.green,
-              padding: 12,
-              boxShadow: "0 40px 80px -20px rgba(16,60,28,0.4)",
-            }}
-          >
-            <div
-              style={{
-                width: "100%",
-                height: "100%",
-                borderRadius: 28,
-                background: COLOR.bg,
-                overflow: "hidden",
-                position: "relative",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <div style={{ width: "66%", height: "56%", borderRadius: 12, position: "relative", overflow: "hidden" }}>
-                <img
-                  src="/assets/scan-pack.jpg"
-                  alt="Medicine pack barcode"
-                  style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                />
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    top: "6%",
-                    width: "100%",
-                    height: 3,
-                    background: `linear-gradient(90deg, transparent, ${COLOR.mint}, transparent)`,
-                    boxShadow: `0 0 12px 3px ${COLOR.mint}aa`,
-                    animation: "hk-scan 3s ease-in-out infinite",
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
       </section>
 
-      <section id="why" style={{ padding: "120px 56px" }}>
-        <div style={{ maxWidth: 1180, margin: "0 auto", display: "grid", gridTemplateColumns: "0.85fr 1.15fr", gap: 64, alignItems: "center" }}>
+      <section id="why" style={{ padding: "120px var(--hk-pad-x)" }}>
+        <div className="hk-grid-2col" style={{ maxWidth: 1180, margin: "0 auto", display: "grid", gridTemplateColumns: "0.85fr 1.15fr", gap: 64, alignItems: "center" }}>
           <div style={{ position: "relative", height: 420, borderRadius: 24, overflow: "hidden" }}>
             <img
               src="/assets/pills-face.png"
@@ -204,8 +153,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <footer style={{ padding: "22px 64px", background: COLOR.green }}>
-        <div style={{ maxWidth: 1360, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <footer style={{ padding: "22px var(--hk-pad-x)", background: COLOR.green }}>
+        <div style={{ maxWidth: 1360, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <div style={{ fontSize: 13, color: "#ffffff66" }}>© 2026 Hakikisha</div>
           <img
             src="/assets/hakikisha-logo.png"

@@ -28,7 +28,7 @@ router.get("/search", async (req, res) => {
   const { q, page } = req.query;
 
   if (typeof q !== "string" || q.trim().length === 0) {
-    res.status(400).json({ error: "q is required" });
+    res.status(400).json({ error: "Please enter a medicine name to search for." });
     return;
   }
 
@@ -71,7 +71,7 @@ router.get("/barcode/:barcode", optionalAuthenticate, async (req, res) => {
   const longitude = parseCoordinate(req.query.lng);
 
   if (typeof barcode !== "string" || !/^\d{8,13}$/.test(barcode)) {
-    res.status(400).json({ error: "Barcode must be numeric" });
+    res.status(400).json({ error: "That doesn't look like a valid barcode. Please check the number and try again." });
     return;
   }
 
@@ -102,14 +102,14 @@ router.get("/:id", async (req, res) => {
   const { id } = req.params;
 
   if (!UUID_PATTERN.test(id)) {
-    res.status(400).json({ error: "Invalid medicine id" });
+    res.status(400).json({ error: "We couldn't find that medicine." });
     return;
   }
 
   const { rows } = await pool.query<MedicineRow>("SELECT * FROM medicines WHERE id = $1", [id]);
 
   if (rows.length === 0) {
-    res.status(404).json({ error: "Medicine not found" });
+    res.status(404).json({ error: "We couldn't find that medicine." });
     return;
   }
 
@@ -120,7 +120,7 @@ router.get("/:id/verification", async (req, res) => {
   const { id } = req.params;
 
   if (!UUID_PATTERN.test(id)) {
-    res.status(400).json({ error: "Invalid medicine id" });
+    res.status(400).json({ error: "We couldn't find that medicine." });
     return;
   }
 
@@ -139,7 +139,7 @@ router.get("/:id/verification", async (req, res) => {
   ]);
 
   if (medicineResult.rows.length === 0) {
-    res.status(404).json({ error: "Medicine not found" });
+    res.status(404).json({ error: "We couldn't find that medicine." });
     return;
   }
 

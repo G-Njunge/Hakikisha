@@ -53,7 +53,7 @@ export default async function authenticate(req: Request, res: Response, next: Ne
   const user = await verifyAccessToken(req);
 
   if (!user) {
-    res.status(401).json({ error: "Missing or invalid Authorization header" });
+    res.status(401).json({ error: "Please log in to continue." });
     return;
   }
 
@@ -75,7 +75,7 @@ export async function optionalAuthenticate(req: Request, _res: Response, next: N
 // Must run after `authenticate` — relies on req.user already being set.
 export function requireAdmin(req: Request, res: Response, next: NextFunction) {
   if (req.user?.role !== "admin") {
-    res.status(403).json({ error: "Admin access required" });
+    res.status(403).json({ error: "You don't have access to this page." });
     return;
   }
   next();

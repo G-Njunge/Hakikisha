@@ -563,5 +563,74 @@ export const openapiSpec = {
         },
       },
     },
+    "/api/admin/stats": {
+      get: {
+        tags: ["Admin"],
+        summary: "Overview stats for the admin dashboard (admin only)",
+        security: [{ cookieAuth: [] }],
+        description: cookieAuthNote,
+        responses: {
+          "200": {
+            description: "Aggregate counts across users, medicines, pharmacies, scans, and reports",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    totalUsers: { type: "integer" },
+                    usersByRole: {
+                      type: "object",
+                      properties: {
+                        admin: { type: "integer" },
+                        manufacturer: { type: "integer" },
+                        pharmacist: { type: "integer" },
+                        consumer: { type: "integer" },
+                      },
+                    },
+                    totalMedicines: { type: "integer" },
+                    totalPharmacies: { type: "integer" },
+                    totalScans: { type: "integer" },
+                    scansByResult: {
+                      type: "object",
+                      properties: {
+                        authentic: { type: "integer" },
+                        expired: { type: "integer" },
+                        unknown: { type: "integer" },
+                      },
+                    },
+                    scansLast7Days: {
+                      type: "array",
+                      description: "Oldest to newest, always exactly 7 entries (0-filled for quiet days)",
+                      items: {
+                        type: "object",
+                        properties: { date: { type: "string", format: "date" }, count: { type: "integer" } },
+                      },
+                    },
+                    totalReports: { type: "integer" },
+                    reportsByStatus: {
+                      type: "object",
+                      properties: {
+                        pending: { type: "integer" },
+                        investigating: { type: "integer" },
+                        escalated: { type: "integer" },
+                        resolved: { type: "integer" },
+                        dismissed: { type: "integer" },
+                      },
+                    },
+                    topScannedMedicines: {
+                      type: "array",
+                      items: { type: "object", properties: { name: { type: "string" }, count: { type: "integer" } } },
+                    },
+                    recentReports: { type: "array", items: { $ref: "#/components/schemas/ReportAdmin" } },
+                  },
+                },
+              },
+            },
+          },
+          "401": { description: "Not authenticated" },
+          "403": { description: "Not an admin" },
+        },
+      },
+    },
   },
 };

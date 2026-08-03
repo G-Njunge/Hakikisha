@@ -37,7 +37,7 @@ export default function csrfProtection(req: Request, res: Response, next: NextFu
   const headerToken = req.headers["x-csrf-token"];
 
   if (typeof cookieToken !== "string" || cookieToken.length === 0 || cookieToken !== headerToken) {
-    res.status(403).json({ error: "Invalid or missing CSRF token" });
+    res.status(403).json({ error: "Your session may have expired. Please refresh the page and try again." });
     return;
   }
 

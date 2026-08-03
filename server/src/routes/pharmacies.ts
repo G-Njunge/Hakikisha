@@ -35,12 +35,12 @@ router.get("/nearby", async (req, res) => {
   const openNowOnly = req.query.openNow === "true";
 
   if (lat === null || lng === null) {
-    res.status(400).json({ error: "lat and lng are required" });
+    res.status(400).json({ error: "We need your location to find nearby pharmacies." });
     return;
   }
 
   if (medicineId !== undefined && (typeof medicineId !== "string" || !UUID_PATTERN.test(medicineId))) {
-    res.status(400).json({ error: "medicineId must be a valid UUID" });
+    res.status(400).json({ error: "We couldn't find that medicine." });
     return;
   }
 

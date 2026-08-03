@@ -8,6 +8,7 @@ import medicinesRouter from "./routes/medicines";
 import pharmaciesRouter from "./routes/pharmacies";
 import scansRouter from "./routes/scans";
 import reportsRouter from "./routes/reports";
+import adminRouter from "./routes/admin";
 import csrfProtection from "./middleware/csrf";
 import rateLimiter from "./middleware/rateLimiter";
 import { openapiSpec } from "./docs/openapiSpec";
@@ -84,6 +85,7 @@ app.use("/api/medicines", medicinesRouter);
 app.use("/api/pharmacies", pharmaciesRouter);
 app.use("/api/scans", scansRouter);
 app.use("/api/reports", reportsRouter);
+app.use("/api/admin", adminRouter);
 
 app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
   if (res.headersSent) {

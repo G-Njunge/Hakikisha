@@ -58,7 +58,7 @@ interface ReportRow {
   updated_at: string;
 }
 
-interface ReportAdminRow extends ReportRow {
+export interface ReportAdminRow extends ReportRow {
   reporter_email: string | null;
   reporter_full_name: string | null;
   scan_medicine_name: string | null;
@@ -103,7 +103,7 @@ function toReportSummary(row: ReportRow) {
 // approve/dismiss a report without knowing who filed it and what it's about.
 // Photo is included in full here (unlike toReportSummary) since reviewing the
 // attached evidence is the point of this view; pagination bounds payload size.
-function toReportAdminResponse(row: ReportAdminRow) {
+export function toReportAdminResponse(row: ReportAdminRow) {
   return {
     id: row.id,
     scanId: row.scan_id,
@@ -128,12 +128,12 @@ router.post("/", authenticate, async (req, res) => {
   const { scanId, productName, description, country, purchaseLocation, photoUrl } = req.body ?? {};
 
   if (typeof description !== "string" || description.trim().length === 0) {
-    res.status(400).json({ error: "description is required" });
+    res.status(400).json({ error: "Please describe what made you suspicious." });
     return;
   }
 
   if (typeof country !== "string" || country.trim().length === 0) {
-    res.status(400).json({ error: "country is required" });
+    res.status(400).json({ error: "Please select a country." });
     return;
   }
 
@@ -141,27 +141,27 @@ router.post("/", authenticate, async (req, res) => {
   const hasProductName = typeof productName === "string" && productName.trim().length > 0;
 
   if (!hasScanId && !hasProductName) {
-    res.status(400).json({ error: "Provide either scanId or productName" });
+    res.status(400).json({ error: "Please tell us which product this report is about." });
     return;
   }
 
   if (hasScanId && !UUID_PATTERN.test(scanId)) {
-    res.status(400).json({ error: "scanId must be a valid UUID" });
+    res.status(400).json({ error: "We couldn't match this report to a scan. Please try again." });
     return;
   }
 
   if (purchaseLocation !== undefined && typeof purchaseLocation !== "string") {
-    res.status(400).json({ error: "purchaseLocation must be a string" });
+    res.status(400).json({ error: "Please check where you bought this and try again." });
     return;
   }
 
   if (photoUrl !== undefined && photoUrl !== null) {
     if (typeof photoUrl !== "string") {
-      res.status(400).json({ error: "photoUrl must be a string" });
+      res.status(400).json({ error: "That photo couldn't be attached. Please try another one." });
       return;
     }
     if (photoUrl.length > MAX_PHOTO_LENGTH) {
-      res.status(400).json({ error: "photoUrl is too large" });
+      res.status(400).json({ error: "That photo is too large. Please try a smaller image." });
       return;
     }
   }
@@ -187,7 +187,7 @@ router.post("/", authenticate, async (req, res) => {
     row = rows[0];
   } catch (err) {
     if ((err as { code?: string }).code === "23503") {
-      res.status(400).json({ error: "scanId does not reference an existing scan" });
+      res.status(400).json({ error: "We couldn't match this report to a scan. Please try again." });
       return;
     }
     throw err;
@@ -293,7 +293,7 @@ router.patch("/:id", authenticate, requireAdmin, async (req, res) => {
   const { action, notes } = req.body ?? {};
 
   if (typeof id !== "string" || !UUID_PATTERN.test(id)) {
-    res.status(400).json({ error: "Invalid report id" });
+    res.status(400).json({ error: "We couldn't find that report." });
     return;
   }
 
@@ -301,17 +301,17 @@ router.patch("/:id", authenticate, requireAdmin, async (req, res) => {
   const hasNotes = notes !== undefined;
 
   if (!hasAction && !hasNotes) {
-    res.status(400).json({ error: "Provide action and/or notes" });
+    res.status(400).json({ error: "Please choose an action or add a note before saving." });
     return;
   }
 
   if (hasAction && !isReportAction(action)) {
-    res.status(400).json({ error: `action must be one of: ${REPORT_ACTIONS.join(", ")}` });
+    res.status(400).json({ error: `Please choose one of: ${REPORT_ACTIONS.join(", ")}.` });
     return;
   }
 
   if (hasNotes && typeof notes !== "string") {
-    res.status(400).json({ error: "notes must be a string" });
+    res.status(400).json({ error: "That note couldn't be saved. Please try again." });
     return;
   }
 
@@ -342,7 +342,7 @@ router.patch("/:id", authenticate, requireAdmin, async (req, res) => {
   );
 
   if (rows.length === 0) {
-    res.status(404).json({ error: "Report not found" });
+    res.status(404).json({ error: "We couldn't find that report." });
     return;
   }
 

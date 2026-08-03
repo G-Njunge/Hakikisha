@@ -87,7 +87,7 @@ export default function RegisterPage() {
     } catch (err) {
       const message =
         (err as { response?: { data?: { error?: string } } }).response?.data?.error ??
-        "Registration failed";
+        "We couldn't complete your registration. Please check your details and try again.";
       setError(message);
     } finally {
       setIsSubmitting(false);
@@ -101,8 +101,10 @@ export default function RegisterPage() {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "20px 56px",
+          padding: "20px var(--hk-pad-x)",
           borderBottom: "1px solid #1A1A2E12",
+          flexWrap: "wrap",
+          gap: 12,
         }}
       >
         <Link
@@ -126,8 +128,8 @@ export default function RegisterPage() {
         </div>
       </nav>
 
-      <div style={{ flex: 1, display: "flex", overflow: "hidden", background: "#E4E7ED" }}>
-        <div style={{ width: "42%", position: "relative", overflow: "hidden" }}>
+      <div className="hk-auth-split" style={{ flex: 1, display: "flex", overflow: "hidden", background: "#E4E7ED" }}>
+        <div className="hk-auth-image-panel" style={{ position: "relative", overflow: "hidden" }}>
           <img
             src="/assets/login-abstract.png"
             alt="Abstract geometric composition"

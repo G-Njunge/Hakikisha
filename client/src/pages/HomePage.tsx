@@ -63,7 +63,7 @@ export default function HomePage() {
 
       <AuthNav showRoleCountry />
 
-      <section style={{ padding: "56px 56px 20px", maxWidth: 1280, margin: "0 auto", position: "relative", zIndex: 1 }}>
+      <section style={{ padding: "var(--hk-pad-y) var(--hk-pad-x) 20px", maxWidth: 1280, margin: "0 auto", position: "relative", zIndex: 1 }}>
         <h1
           style={{
             fontFamily: "'Manrope', sans-serif",
@@ -78,7 +78,7 @@ export default function HomePage() {
         </h1>
       </section>
 
-      <section style={{ padding: "28px 56px 0", maxWidth: 1280, margin: "0 auto", position: "relative", zIndex: 1 }}>
+      <section style={{ padding: "28px var(--hk-pad-x) 0", maxWidth: 1280, margin: "0 auto", position: "relative", zIndex: 1 }}>
         <div style={{ textAlign: "left", marginBottom: 26 }}>
           <div
             style={{
@@ -102,7 +102,7 @@ export default function HomePage() {
           <p style={{ fontSize: 14.5, color: "#1A1A2E88", margin: 0 }}>Three ways to check it. Pick whichever works for you.</p>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: 22 }}>
+        <div className="hk-grid-12" style={{ display: "grid", gap: 22 }}>
           <div
             style={{
               gridColumn: "span 7",
@@ -212,9 +212,9 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section style={{ padding: "44px 56px 80px", maxWidth: 1280, margin: "0 auto", position: "relative", zIndex: 1 }}>
+      <section style={{ padding: "44px var(--hk-pad-x) 80px", maxWidth: 1280, margin: "0 auto", position: "relative", zIndex: 1 }}>
         <h3 style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 800, fontSize: 20, color: "#1A1A2E", margin: "0 0 20px" }}>Quick actions</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
+        <div className="hk-grid-3" style={{ display: "grid", gap: 20 }}>
           <Link
             to="/report"
             className="hk-card"
@@ -244,8 +244,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      <footer style={{ padding: "22px 64px", background: "#103c1c", position: "relative", zIndex: 1 }}>
-        <div style={{ maxWidth: 1360, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <footer style={{ padding: "22px var(--hk-pad-x)", background: "#103c1c", position: "relative", zIndex: 1 }}>
+        <div style={{ maxWidth: 1360, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <div style={{ fontSize: 13, color: "#ffffff66" }}>© 2026 Hakikisha</div>
           <img
             src="/assets/hakikisha-logo.png"

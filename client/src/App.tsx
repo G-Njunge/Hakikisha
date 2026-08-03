@@ -1,4 +1,4 @@
-import { Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
@@ -7,7 +7,6 @@ import BarcodeScanPage from "./pages/BarcodeScanPage";
 import SearchPage from "./pages/SearchPage";
 import MedicineDetailPage from "./pages/MedicineDetailPage";
 import ReportCounterfeitPage from "./pages/ReportCounterfeitPage";
-import AdminReportsPage from "./pages/AdminReportsPage";
 import DashboardPage from "./pages/DashboardPage";
 import PharmacyMapPage from "./pages/PharmacyMapPage";
 import LogoutPage from "./pages/LogoutPage";
@@ -35,14 +34,10 @@ function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/admin/reports"
-        element={
-          <ProtectedRoute>
-            <AdminReportsPage />
-          </ProtectedRoute>
-        }
-      />
+      {/* Admin management moved into the Dashboard's own tabs (Overview /
+          Manage reports) rather than a separate nav link — this keeps any
+          old bookmark/link working. */}
+      <Route path="/admin/reports" element={<Navigate to="/dashboard" replace />} />
       <Route
         path="/dashboard"
         element={

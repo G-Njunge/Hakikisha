@@ -71,7 +71,7 @@ router.get("/check-email", async (req, res) => {
   const normalizedEmail = normalizeEmail(email);
 
   if (!normalizedEmail) {
-    res.status(400).json({ error: "email is required" });
+    res.status(400).json({ error: "Please enter your email address." });
     return;
   }
 
@@ -96,12 +96,12 @@ router.post("/register", async (req, res) => {
     country.trim().length === 0 ||
     !normalizedEmail
   ) {
-    res.status(400).json({ error: "email, password, fullName, and country are required" });
+    res.status(400).json({ error: "Please fill in your name, email, password, and country." });
     return;
   }
 
   if (!EMAIL_PATTERN.test(normalizedEmail)) {
-    res.status(400).json({ error: "A valid email address is required" });
+    res.status(400).json({ error: "Please enter a valid email address." });
     return;
   }
 
@@ -115,7 +115,7 @@ router.post("/register", async (req, res) => {
 
   const existing = await pool.query("SELECT id FROM users WHERE email = $1", [normalizedEmail]);
   if (existing.rows.length > 0) {
-    res.status(409).json({ error: "Email already registered" });
+    res.status(409).json({ error: "That email is already registered." });
     return;
   }
 
@@ -212,7 +212,7 @@ router.post("/login", async (req, res) => {
   const normalizedEmail = normalizeEmail(email);
 
   if (!normalizedEmail || typeof password !== "string") {
-    res.status(400).json({ error: "email and password are required" });
+    res.status(400).json({ error: "Please enter your email and password." });
     return;
   }
 
@@ -247,7 +247,7 @@ router.post("/refresh", async (req, res) => {
   const refreshToken = req.cookies?.[REFRESH_COOKIE];
 
   if (typeof refreshToken !== "string") {
-    res.status(401).json({ error: "No refresh token cookie present" });
+    res.status(401).json({ error: "Your session has ended. Please log in again." });
     return;
   }
 
@@ -262,7 +262,7 @@ router.post("/refresh", async (req, res) => {
 
   if (!stored) {
     clearAuthCookies(res);
-    res.status(401).json({ error: "Invalid or expired refresh token" });
+    res.status(401).json({ error: "Your session has ended. Please log in again." });
     return;
   }
 
@@ -310,7 +310,7 @@ router.get("/me", authenticate, async (req, res) => {
   );
 
   if (rows.length === 0) {
-    res.status(404).json({ error: "User not found" });
+    res.status(404).json({ error: "We couldn't find your account. Please log in again." });
     return;
   }
 
@@ -321,7 +321,7 @@ router.patch("/me", authenticate, async (req, res) => {
   const { fullName } = req.body ?? {};
 
   if (typeof fullName !== "string" || fullName.trim().length === 0) {
-    res.status(400).json({ error: "fullName is required" });
+    res.status(400).json({ error: "Please enter your name." });
     return;
   }
 
@@ -332,7 +332,7 @@ router.patch("/me", authenticate, async (req, res) => {
   );
 
   if (rows.length === 0) {
-    res.status(404).json({ error: "User not found" });
+    res.status(404).json({ error: "We couldn't find your account. Please log in again." });
     return;
   }
 
@@ -343,7 +343,7 @@ router.post("/change-password", authenticate, async (req, res) => {
   const { currentPassword, newPassword } = req.body ?? {};
 
   if (typeof currentPassword !== "string" || typeof newPassword !== "string") {
-    res.status(400).json({ error: "currentPassword and newPassword are required" });
+    res.status(400).json({ error: "Please enter your current and new password." });
     return;
   }
 
@@ -359,7 +359,7 @@ router.post("/change-password", authenticate, async (req, res) => {
   );
 
   if (rows.length === 0) {
-    res.status(404).json({ error: "User not found" });
+    res.status(404).json({ error: "We couldn't find your account. Please log in again." });
     return;
   }
 
