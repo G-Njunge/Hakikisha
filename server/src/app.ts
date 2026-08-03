@@ -2,6 +2,7 @@ import express, { NextFunction, Request, Response } from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
+import swaggerUi from "swagger-ui-express";
 import authRouter from "./routes/auth";
 import medicinesRouter from "./routes/medicines";
 import pharmaciesRouter from "./routes/pharmacies";
@@ -9,6 +10,7 @@ import scansRouter from "./routes/scans";
 import reportsRouter from "./routes/reports";
 import csrfProtection from "./middleware/csrf";
 import rateLimiter from "./middleware/rateLimiter";
+import { openapiSpec } from "./docs/openapiSpec";
 
 const app = express();
 
@@ -35,8 +37,15 @@ app.use(
     // verify-email renders a real browser-navigated HTML page with an
     // inline <style> block (fixed strings only, never user input — no live
     // XSS vector, this is just CSP hygiene needing the relaxation to render).
+    // swagger-ui-express's docs page similarly needs 'unsafe-inline' script-src
+    // to run its bootstrapping <script> block — same reasoning: fixed content,
+    // not user input, and this API serves no other user-facing HTML.
     contentSecurityPolicy: {
-      directives: { ...helmet.contentSecurityPolicy.getDefaultDirectives(), "style-src": ["'self'", "'unsafe-inline'"] },
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "script-src": ["'self'", "'unsafe-inline'"],
+      },
     },
     // This API is deliberately consumed cross-origin by the SPA.
     crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -63,6 +72,12 @@ app.use(csrfProtection);
 app.get("/health", (req: Request, res: Response) => {
   res.status(200).json({ status: "ok" });
 });
+
+// GET-only, so untouched by csrfProtection (which only checks mutating
+// methods) — left reachable in production, consistent with the SRS's own
+// note that health-authority stakeholders may want to review the platform's
+// reporting capabilities.
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));
 
 app.use("/api/auth", authRouter);
 app.use("/api/medicines", medicinesRouter);

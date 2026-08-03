@@ -10,6 +10,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 import { Pool } from "pg";
+import { sslConfigFor } from "./sslConfig";
 
 dotenv.config();
 
@@ -33,10 +34,9 @@ if (!process.argv.includes("--yes")) {
   process.exit(1);
 }
 
-const isLocalDb = /localhost|127\.0\.0\.1/.test(databaseUrl);
 const pool = new Pool({
   connectionString: databaseUrl,
-  ssl: isLocalDb ? undefined : { rejectUnauthorized: false },
+  ssl: sslConfigFor(databaseUrl),
 });
 
 async function main() {

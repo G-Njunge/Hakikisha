@@ -3,11 +3,7 @@ import jwt from "jsonwebtoken";
 import pool from "../db/pool";
 import { ACCESS_COOKIE } from "../lib/cookies";
 
-// Returns the verified payload, or null if the token is missing/invalid/
-// expired/revoked. Shared by `authenticate` (rejects on null),
-// `optionalAuthenticate` (proceeds anonymously on null), and the rate
-// limiter (to bucket by user vs. IP).
-export async function verifyAccessToken(req: Request): Promise<Request["user"] | null> {
+async function computeVerifiedUser(req: Request): Promise<Request["user"] | null> {
   const token = req.cookies?.[ACCESS_COOKIE];
   if (typeof token !== "string" || token.length === 0) {
     return null;
@@ -30,6 +26,27 @@ export async function verifyAccessToken(req: Request): Promise<Request["user"] |
   }
 
   return payload as Request["user"];
+}
+
+// Per-request memoization: the rate limiter calls this independently for
+// both its `limit` and `keyGenerator` resolvers, and `authenticate`/
+// `optionalAuthenticate` call it again — without caching, a single
+// authenticated request would run the JWT-verify + revocation-check query
+// up to three times. Keyed by the request object itself, so it's scoped to
+// one request and needs no manual cleanup (garbage-collected with the req).
+const verifiedUserCache = new WeakMap<Request, Promise<Request["user"] | null>>();
+
+// Returns the verified payload, or null if the token is missing/invalid/
+// expired/revoked. Shared by `authenticate` (rejects on null),
+// `optionalAuthenticate` (proceeds anonymously on null), and the rate
+// limiter (to bucket by user vs. IP).
+export function verifyAccessToken(req: Request): Promise<Request["user"] | null> {
+  let cached = verifiedUserCache.get(req);
+  if (!cached) {
+    cached = computeVerifiedUser(req);
+    verifiedUserCache.set(req, cached);
+  }
+  return cached;
 }
 
 export default async function authenticate(req: Request, res: Response, next: NextFunction) {

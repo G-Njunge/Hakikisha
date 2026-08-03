@@ -1,12 +1,10 @@
 import { useState } from "react";
 import type { ChangeEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Html5Qrcode } from "html5-qrcode";
 import { useAuth } from "../hooks/useAuth";
 import LandingPage from "./LandingPage";
 import AuthNav from "../components/AuthNav";
-
-const FILE_SCAN_ELEMENT_ID = "home-file-reader";
+import { decodeBarcodeFromFile } from "../utils/zxingFileDecoder";
 
 export default function HomePage() {
   const { user, isLoading } = useAuth();
@@ -33,12 +31,14 @@ export default function HomePage() {
     setFileScanError(null);
     setIsFileScanning(true);
 
+    console.log("[photo-scan] file selected", { name: file.name, type: file.type, sizeBytes: file.size });
+
     try {
-      const scanner = new Html5Qrcode(FILE_SCAN_ELEMENT_ID);
-      const decodedText = await scanner.scanFile(file, false);
+      const decodedText = await decodeBarcodeFromFile(file);
+      console.log("[photo-scan] decoded:", decodedText);
       navigate(`/barcode?code=${encodeURIComponent(decodedText)}`);
     } catch (err) {
-      console.error("Failed to read code from image", err);
+      console.error("[photo-scan] Failed to read code from image — full error object:", err);
       setFileScanError("Couldn't find a scannable code in that photo. Try a clearer, well-lit shot.");
     } finally {
       setIsFileScanning(false);
@@ -119,41 +119,6 @@ export default function HomePage() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 18, color: "#FDFBF7" }}>Scan with camera</div>
               <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#5fbf7d", animation: "hk-pulse 1.6s ease-out infinite" }} />
-            </div>
-            <div
-              style={{
-                position: "relative",
-                height: 180,
-                borderRadius: 24,
-                background: "#00000030",
-                overflow: "hidden",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <div
-                style={{
-                  width: 110,
-                  height: 140,
-                  borderRadius: 12,
-                  background: "repeating-linear-gradient(135deg,#3e4440,#3e4440 8px,#3e4440cc 8px,#3e4440cc 16px)",
-                  position: "relative",
-                  boxShadow: "0 20px 40px -14px rgba(0,0,0,0.5)",
-                }}
-              >
-                <div
-                  style={{
-                    position: "absolute",
-                    left: 0,
-                    width: "100%",
-                    height: 3,
-                    background: "linear-gradient(90deg,transparent,#5fbf7d,transparent)",
-                    boxShadow: "0 0 14px 3px #5fbf7dcc",
-                    animation: "hk-scanline 3s ease-in-out infinite",
-                  }}
-                />
-              </div>
             </div>
             <p style={{ fontSize: 13.5, color: "#FDFBF7aa", margin: 0, lineHeight: 1.5 }}>
               Line up the barcode to the frame. We'll check it the moment it's in focus.
@@ -242,7 +207,6 @@ export default function HomePage() {
                 <input type="file" accept="image/*" onChange={handleUpload} disabled={isFileScanning} hidden />
               </label>
               {fileScanError && <div style={{ fontSize: 12.5, color: "#b91c1c" }}>{fileScanError}</div>}
-              <div id={FILE_SCAN_ELEMENT_ID} style={{ display: "none" }} />
             </div>
           </div>
         </div>

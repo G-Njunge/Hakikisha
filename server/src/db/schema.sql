@@ -15,6 +15,9 @@ CREATE TABLE users (
     country VARCHAR(100) NOT NULL,
     role user_role NOT NULL DEFAULT 'consumer',
     is_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    -- Only meaningful for admin accounts — when they last opened the admin
+    -- reports table, used to compute an "unread reports" count.
+    reports_last_viewed_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -71,7 +74,7 @@ CREATE TABLE scans (
     scanned_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TYPE report_status AS ENUM ('pending', 'investigating', 'resolved', 'dismissed');
+CREATE TYPE report_status AS ENUM ('pending', 'investigating', 'resolved', 'dismissed', 'escalated');
 
 CREATE TABLE reports (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -88,6 +91,9 @@ CREATE TABLE reports (
     -- (Railway volume / S3 / etc.) before this handles real traffic.
     photo_url TEXT,
     status report_status NOT NULL DEFAULT 'pending',
+    -- Admin-only working notes, independent of status — savable without
+    -- forcing a status transition.
+    admin_notes TEXT,
     resolved_by UUID REFERENCES users(id) ON DELETE SET NULL,
     resolved_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -95,7 +101,7 @@ CREATE TABLE reports (
     CHECK (scan_id IS NOT NULL OR product_name IS NOT NULL)
 );
 
-CREATE TYPE photo_angle AS ENUM ('front', 'back');
+CREATE TYPE photo_angle AS ENUM ('tablet', 'package');
 
 CREATE TABLE medicine_photos (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

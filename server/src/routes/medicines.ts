@@ -10,7 +10,7 @@ const PAGE_SIZE = 10;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface MedicinePhotoRow {
-  angle: "front" | "back";
+  angle: "tablet" | "package";
   image_url: string;
 }
 
@@ -143,12 +143,12 @@ router.get("/:id/verification", async (req, res) => {
     return;
   }
 
-  const photos = photosResult.rows.reduce<{ front: string | null; back: string | null }>(
+  const photos = photosResult.rows.reduce<{ tablet: string | null; package: string | null }>(
     (acc, row) => {
       acc[row.angle] = row.image_url;
       return acc;
     },
-    { front: null, back: null }
+    { tablet: null, package: null }
   );
 
   const packageVerification = checklistResult.rows

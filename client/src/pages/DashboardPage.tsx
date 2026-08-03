@@ -9,6 +9,7 @@ import { getMyReports } from "../api/reports";
 import type { ScanHistoryItem, ScanResultCode } from "../types/scan";
 import type { ReportStatus, ReportSummary } from "../types/report";
 import AuthNav from "../components/AuthNav";
+import { validatePasswordStrength } from "../utils/passwordPolicy";
 
 type Tab = "scans" | "reports" | "settings";
 
@@ -37,6 +38,8 @@ function reportStatusLabel(status: ReportStatus): string {
       return "PENDING";
     case "investigating":
       return "UNDER REVIEW";
+    case "escalated":
+      return "ESCALATED";
     case "resolved":
       return "RESOLVED";
     case "dismissed":
@@ -45,7 +48,9 @@ function reportStatusLabel(status: ReportStatus): string {
 }
 
 function reportStatusColor(status: ReportStatus): string {
-  return status === "resolved" ? "#2f8f52" : "#b8862f";
+  if (status === "resolved") return "#2f8f52";
+  if (status === "escalated") return "#c23a3a";
+  return "#b8862f";
 }
 
 const tabButtonStyle = (active: boolean): CSSProperties => ({
@@ -142,8 +147,9 @@ export default function DashboardPage() {
   async function handlePasswordSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (newPassword.length < 8) {
-      setPasswordStatus({ type: "error", message: "New password must be at least 8 characters." });
+    const passwordError = validatePasswordStrength(newPassword);
+    if (passwordError) {
+      setPasswordStatus({ type: "error", message: passwordError });
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -242,11 +248,20 @@ export default function DashboardPage() {
                         {scan.medicineName ?? scan.barcode ?? "Unknown"}
                       </div>
                       <div style={{ fontSize: 13, color: "#1A1A2E77", marginTop: 2 }}>Barcode: {scan.barcode ?? "Unknown"}</div>
-                      {scan.medicineId && (
-                        <Link to={`/medicines/${scan.medicineId}`} style={{ fontSize: 12.5, fontWeight: 600, color: "#103c1c" }}>
-                          View medicine details
+                      <div style={{ display: "flex", gap: 14, marginTop: 2 }}>
+                        {scan.medicineId && (
+                          <Link to={`/medicines/${scan.medicineId}`} style={{ fontSize: 12.5, fontWeight: 600, color: "#103c1c" }}>
+                            View medicine details
+                          </Link>
+                        )}
+                        <Link
+                          to="/report"
+                          state={{ scanId: scan.id, productName: scan.medicineName ?? undefined }}
+                          style={{ fontSize: 12.5, fontWeight: 600, color: "#c23a3a" }}
+                        >
+                          Report this
                         </Link>
-                      )}
+                      </div>
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
                       <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: "0.04em", color: badge.color, textTransform: "uppercase" }}>

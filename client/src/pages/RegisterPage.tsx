@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { checkEmailAvailability } from "../api/auth";
 import type { SelfRegisterRole } from "../types/auth";
+import { PASSWORD_REQUIREMENTS } from "../utils/passwordPolicy";
 
 const ROLES: { value: SelfRegisterRole; label: string }[] = [
   { value: "consumer", label: "Consumer" },
@@ -243,6 +244,18 @@ export default function RegisterPage() {
                   style={fieldInputStyle}
                   required
                 />
+                {password.length > 0 && (
+                  <ul style={{ listStyle: "none", margin: 0, padding: "0 6px", display: "flex", flexDirection: "column", gap: 3 }}>
+                    {PASSWORD_REQUIREMENTS.map((req) => {
+                      const met = req.test(password);
+                      return (
+                        <li key={req.key} style={{ fontSize: 12.5, color: met ? "#2f8f52" : "#1A1A2E77" }}>
+                          {met ? "✓" : "○"} {req.label}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </label>
 
               <label style={{ display: "flex", flexDirection: "column", gap: 9 }}>

@@ -72,7 +72,7 @@ describe("Email verification", () => {
 
     const res = await request(app).post("/api/auth/register").send({
       email: "NewUser@Example.com",
-      password: "password123",
+      password: "Password123",
       fullName: "Jane Doe",
       country: "Kenya",
       role: "consumer",
@@ -93,37 +93,45 @@ describe("Login", () => {
     mockQuery.mockReset();
   });
 
-  it("sets httpOnly auth cookies and returns no tokens in the response body", async () => {
-    const passwordHash = await bcrypt.hash("password123", 12);
-    mockQuery
-      .mockResolvedValueOnce({
-        rows: [
-          {
-            id: "user-1",
-            email: "jane@example.com",
-            password_hash: passwordHash,
-            full_name: "Jane Doe",
-            country: "Kenya",
-            role: "consumer",
-            is_verified: true,
-            created_at: "2026-07-20T00:00:00.000Z",
-          },
-        ],
-      })
-      .mockResolvedValueOnce({ rows: [] }); // INSERT INTO refresh_tokens
+  // Real bcrypt cost-12 hashing plus v8 coverage instrumentation can push
+  // this past vitest's default 5000ms test timeout on slower machines/CI —
+  // bumped rather than mocking bcrypt, since this test's whole point is
+  // exercising the real hash/compare path.
+  it(
+    "sets httpOnly auth cookies and returns no tokens in the response body",
+    async () => {
+      const passwordHash = await bcrypt.hash("password123", 12);
+      mockQuery
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              id: "user-1",
+              email: "jane@example.com",
+              password_hash: passwordHash,
+              full_name: "Jane Doe",
+              country: "Kenya",
+              role: "consumer",
+              is_verified: true,
+              created_at: "2026-07-20T00:00:00.000Z",
+            },
+          ],
+        })
+        .mockResolvedValueOnce({ rows: [] }); // INSERT INTO refresh_tokens
 
-    const res = await request(app)
-      .post("/api/auth/login")
-      .send({ email: "jane@example.com", password: "password123", remember: true });
+      const res = await request(app)
+        .post("/api/auth/login")
+        .send({ email: "jane@example.com", password: "password123", remember: true });
 
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ user: expect.objectContaining({ email: "jane@example.com" }) });
-    expect(res.body.accessToken).toBeUndefined();
-    expect(res.body.refreshToken).toBeUndefined();
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ user: expect.objectContaining({ email: "jane@example.com" }) });
+      expect(res.body.accessToken).toBeUndefined();
+      expect(res.body.refreshToken).toBeUndefined();
 
-    const cookies = res.headers["set-cookie"] as unknown as string[];
-    expect(cookies.some((c) => c.startsWith("hakikisha_access_token=") && /HttpOnly/i.test(c))).toBe(true);
-    expect(cookies.some((c) => c.startsWith("hakikisha_refresh_token=") && /HttpOnly/i.test(c))).toBe(true);
-    expect(cookies.some((c) => c.startsWith("hakikisha_csrf_token=") && !/HttpOnly/i.test(c))).toBe(true);
-  });
+      const cookies = res.headers["set-cookie"] as unknown as string[];
+      expect(cookies.some((c) => c.startsWith("hakikisha_access_token=") && /HttpOnly/i.test(c))).toBe(true);
+      expect(cookies.some((c) => c.startsWith("hakikisha_refresh_token=") && /HttpOnly/i.test(c))).toBe(true);
+      expect(cookies.some((c) => c.startsWith("hakikisha_csrf_token=") && !/HttpOnly/i.test(c))).toBe(true);
+    },
+    15000
+  );
 });

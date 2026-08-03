@@ -45,6 +45,12 @@ export default function PharmacyMap({ center, pharmacies, scrollWheelZoom = fals
               {pharmacy.stocksMedicine && <div className="stock-badge">Confirmed in stock</div>}
               <div>{pharmacy.address}</div>
               {pharmacy.phone && <div>{pharmacy.phone}</div>}
+              {pharmacy.hours && <div>{pharmacy.hours}</div>}
+              {pharmacy.isOpenNow !== null && (
+                <div style={{ fontWeight: 600, color: pharmacy.isOpenNow ? "#2f8f52" : "#b91c1c" }}>
+                  {pharmacy.isOpenNow ? "Open now" : "Closed now"}
+                </div>
+              )}
               <div>{pharmacy.distanceKm} km away</div>
               <a href={googleMapsDirectionsUrl(pharmacy.latitude, pharmacy.longitude)} target="_blank" rel="noreferrer">
                 Navigate

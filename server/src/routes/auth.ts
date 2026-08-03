@@ -11,6 +11,7 @@ import {
 } from "../lib/tokens";
 import { sendVerificationEmail } from "../lib/email";
 import { REFRESH_COOKIE, clearAuthCookies, generateCsrfToken, setAuthCookies } from "../lib/cookies";
+import { validatePasswordStrength } from "../lib/passwordPolicy";
 
 const router = Router();
 
@@ -104,8 +105,9 @@ router.post("/register", async (req, res) => {
     return;
   }
 
-  if (password.length < 8) {
-    res.status(400).json({ error: "password must be at least 8 characters" });
+  const passwordError = validatePasswordStrength(password);
+  if (passwordError) {
+    res.status(400).json({ error: passwordError });
     return;
   }
 
@@ -345,8 +347,9 @@ router.post("/change-password", authenticate, async (req, res) => {
     return;
   }
 
-  if (newPassword.length < 8) {
-    res.status(400).json({ error: "newPassword must be at least 8 characters" });
+  const newPasswordError = validatePasswordStrength(newPassword);
+  if (newPasswordError) {
+    res.status(400).json({ error: newPasswordError });
     return;
   }
 

@@ -107,7 +107,7 @@ export default function LandingPage() {
               className="hk-btn"
               style={{ padding: "15px 30px", borderRadius: 8, background: COLOR.green, color: COLOR.bg, fontSize: 15, fontWeight: 700 }}
             >
-              Hakikisha
+              Try Hakikisha
             </Link>
           </div>
         </div>

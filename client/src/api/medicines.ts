@@ -39,10 +39,11 @@ export async function getNearbyPharmacies(
   lat: number,
   lng: number,
   medicineId?: string,
-  radiusKm?: number
+  radiusKm?: number,
+  openNow?: boolean
 ): Promise<NearbyPharmacy[]> {
   const { data } = await apiClient.get<{ results: NearbyPharmacy[] }>("/api/pharmacies/nearby", {
-    params: { lat, lng, medicineId, radiusKm },
+    params: { lat, lng, medicineId, radiusKm, openNow: openNow ? "true" : undefined },
   });
   return data.results;
 }

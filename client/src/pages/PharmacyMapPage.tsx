@@ -9,14 +9,19 @@ import AuthNav from "../components/AuthNav";
 // This app's pharmacy data is currently Kigali-only (see server/src/db/seed.ts).
 // A denied/unavailable geolocation request falls back to Kigali's centre.
 const KIGALI_CENTER = { lat: -1.9441, lng: 30.0619 };
-// Always used on this page, regardless of whether geolocation actually
-// succeeded — the API's own default (10km) is tight enough that several real
-// Kigali pharmacies (8.8-9.5km from the centre point) silently drop out
-// whenever the detected position isn't bit-for-bit identical to
-// KIGALI_CENTER, which real geolocation coordinates essentially never are.
-// Since all of this app's pharmacy data sits within Kigali anyway, there's no
-// scenario where the tighter default is the right choice here.
-const SEARCH_RADIUS_KM = 30;
+// "All" (30km) is the default and preserves this page's original behavior —
+// the API's own default (10km) is tight enough that several real Kigali
+// pharmacies (8.8-9.5km from the centre point) silently drop out whenever the
+// detected position isn't bit-for-bit identical to KIGALI_CENTER, which real
+// geolocation coordinates essentially never are. 1/5/10km are offered as
+// narrower options for users who want to filter down.
+const RADIUS_OPTIONS = [
+  { value: 1, label: "1 km" },
+  { value: 5, label: "5 km" },
+  { value: 10, label: "10 km" },
+  { value: 30, label: "All (30 km)" },
+] as const;
+const DEFAULT_RADIUS_KM = 30;
 
 function googleMapsDirectionsUrl(lat: number, lng: number): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
@@ -32,39 +37,77 @@ export default function PharmacyMapPage() {
   const [isSearchingMedicine, setIsSearchingMedicine] = useState(false);
 
   // Defaults to Kigali's centre (this app's pharmacy data is currently
-  // Kigali-only) so the effect below never needs a synchronous "no
-  // geolocation" fallback branch — it only ever refines this with a more
-  // precise position if/when the browser grants it.
+  // Kigali-only) until the user explicitly shares their location (or skips)
+  // via the consent prompt below — no longer requested silently on mount.
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number }>(KIGALI_CENTER);
   const [pharmacies, setPharmacies] = useState<NearbyPharmacy[] | null>(null);
-  const [status, setStatus] = useState<"loading" | "error" | "success">("loading");
+  // "idle" — no medicine searched yet, nothing pharmacy-related renders.
+  const [status, setStatus] = useState<"idle" | "loading" | "error" | "success">("idle");
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [radiusKm, setRadiusKm] = useState<number>(DEFAULT_RADIUS_KM);
+  // Reveals closed/hours-unknown pharmacies alongside the open ones — off by
+  // default so the list only shows pharmacies you could actually walk into
+  // right now. Reset whenever the searched medicine changes.
+  const [showClosedToo, setShowClosedToo] = useState(false);
 
-  useEffect(() => {
-    if (!("geolocation" in navigator)) return;
+  // Our own consent prompt, shown before ever triggering the browser's
+  // native geolocation permission dialog — "unresolved" until the user picks
+  // Share/Not now. "locating" covers the async gap while the browser prompt
+  // (and any OS-level one behind it) is up, so the UI doesn't look stuck.
+  const [locationConsent, setLocationConsent] = useState<"unresolved" | "locating" | "resolved">("unresolved");
+  const [locationDenied, setLocationDenied] = useState(false);
+
+  function shareLocation() {
+    if (!("geolocation" in navigator)) {
+      setLocationConsent("resolved");
+      return;
+    }
+    setLocationConsent("locating");
     navigator.geolocation.getCurrentPosition(
-      (position) => setUserCoords({ lat: position.coords.latitude, lng: position.coords.longitude }),
-      () => {} // keep the Kigali fallback already in state
+      (position) => {
+        setUserCoords({ lat: position.coords.latitude, lng: position.coords.longitude });
+        setLocationConsent("resolved");
+      },
+      () => {
+        // Denied or unavailable — keep the Kigali fallback already in state.
+        setLocationDenied(true);
+        setLocationConsent("resolved");
+      }
     );
-  }, []);
+  }
 
-  // Resets status to "loading" during render when (userCoords, medicineId)
-  // changes, rather than via a synchronous setState at the top of the fetch
-  // effect below — React's recommended pattern for adjusting state in
-  // response to a prop/state change instead of an Effect.
+  function skipLocation() {
+    setLocationConsent("resolved");
+  }
+
+  // Resets status/showClosedToo during render when (userCoords, medicineId,
+  // radiusKm) changes, rather than via a synchronous setState at the top of
+  // the fetch effect below — React's recommended pattern for adjusting state
+  // in response to a prop/state change instead of an Effect.
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
-  const currentKey = `${userCoords.lat},${userCoords.lng}:${medicineId ?? ""}`;
+  const currentKey = `${userCoords.lat},${userCoords.lng}:${medicineId ?? ""}:${radiusKm}`;
   if (loadedKey !== currentKey) {
     setLoadedKey(currentKey);
-    setStatus("loading");
-    setError(null);
+    setShowClosedToo(false);
+    if (medicineId) {
+      setStatus("loading");
+      setError(null);
+    } else {
+      setStatus("idle");
+      setPharmacies(null);
+    }
   }
 
   useEffect(() => {
+    if (!medicineId) return;
+
     let cancelled = false;
 
-    getNearbyPharmacies(userCoords.lat, userCoords.lng, medicineId ?? undefined, SEARCH_RADIUS_KM)
+    // Fetched without the openNow filter — the full stocked list is needed
+    // client-side to compute the open vs. closed split and the "N closed"
+    // count, not just whichever subset happens to be open right now.
+    getNearbyPharmacies(userCoords.lat, userCoords.lng, medicineId, radiusKm)
       .then((results) => {
         if (cancelled) return;
         setPharmacies(results);
@@ -80,7 +123,7 @@ export default function PharmacyMapPage() {
     return () => {
       cancelled = true;
     };
-  }, [userCoords, medicineId]);
+  }, [userCoords, medicineId, radiusKm]);
 
   async function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -116,11 +159,14 @@ export default function PharmacyMapPage() {
     setSearchParams({});
   }
 
-  // When a medicine filter is active, only pharmacies confirmed to stock it
-  // are shown at all (map markers and list alike) — not just sorted first —
-  // per the point of searching for a specific medicine.
-  const visiblePharmacies = medicineId ? (pharmacies ?? []).filter((p) => p.stocksMedicine === true) : pharmacies;
-  const selected = visiblePharmacies?.find((p) => p.id === selectedId) ?? null;
+  // Only pharmacies confirmed to stock the searched medicine count at all.
+  const stockedPharmacies = (pharmacies ?? []).filter((p) => p.stocksMedicine === true);
+  // isOpenNow === null (hours unknown) is treated like closed here — it's
+  // not confirmed open, so it shouldn't be presented as if it were.
+  const openPharmacies = stockedPharmacies.filter((p) => p.isOpenNow === true);
+  const closedPharmacies = stockedPharmacies.filter((p) => p.isOpenNow !== true);
+  const displayedPharmacies = showClosedToo ? stockedPharmacies : openPharmacies;
+  const selected = displayedPharmacies.find((p) => p.id === selectedId) ?? null;
 
   return (
     <div className="hk-page" style={{ minHeight: "100vh", width: "100%", overflowX: "hidden", background: "#FDFBF7", position: "relative" }}>
@@ -137,9 +183,54 @@ export default function PharmacyMapPage() {
         </h1>
         <p style={{ fontSize: 14.5, color: "#1A1A2E88", margin: "0 0 22px" }}>
           {medicineName
-            ? `Showing only pharmacies confirmed in stock for ${medicineName}.`
-            : "Search a medicine to see only the pharmacies confirmed to stock it."}
+            ? `Showing pharmacies confirmed in stock for ${medicineName} that are open right now.`
+            : "Search a medicine to see nearby pharmacies confirmed to stock it and currently open."}
         </p>
+
+        {locationConsent !== "resolved" && (
+          <div
+            className="hk-card"
+            style={{
+              borderRadius: 16,
+              padding: "16px 20px",
+              marginBottom: 20,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <span style={{ fontSize: 13.5, color: "#1A1A2E" }}>
+              Share your location to sort pharmacies by distance from you? Otherwise we'll center on Kigali.
+            </span>
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={shareLocation}
+                disabled={locationConsent === "locating"}
+                className="hk-neu-btn"
+                style={{ padding: "9px 18px", border: "none", borderRadius: 999, background: "#103c1c", color: "#FDFBF7", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}
+              >
+                {locationConsent === "locating" ? "Locating..." : "Share location"}
+              </button>
+              <button
+                type="button"
+                onClick={skipLocation}
+                disabled={locationConsent === "locating"}
+                style={{ padding: "9px 18px", border: "1.5px solid #1A1A2E22", borderRadius: 999, background: "transparent", color: "#1A1A2E88", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}
+              >
+                Not now
+              </button>
+            </div>
+          </div>
+        )}
+        {locationConsent === "resolved" && locationDenied && (
+          <p style={{ fontSize: 13, color: "#1A1A2E77", marginBottom: 16 }}>
+            Couldn't get your location — showing results centered on Kigali instead.
+          </p>
+        )}
+
         <form onSubmit={handleSearchSubmit} style={{ display: "flex", gap: 10, maxWidth: 520, marginBottom: 8 }}>
           <input
             className="hk-neu-field"
@@ -160,15 +251,40 @@ export default function PharmacyMapPage() {
           </button>
         </form>
         {queryError && <div style={{ fontSize: 13, color: "#b91c1c", marginBottom: 12 }}>{queryError}</div>}
-        <div style={{ fontSize: 13, color: "#1A1A2E77", marginBottom: 20 }}>
-          {status === "success" &&
-            visiblePharmacies &&
-            (medicineName
-              ? `${visiblePharmacies.length} pharmac${visiblePharmacies.length === 1 ? "y" : "ies"} stock ${medicineName}`
-              : `${visiblePharmacies.length} pharmac${visiblePharmacies.length === 1 ? "y" : "ies"} nearby`)}
+        <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, color: "#1A1A2E88" }}>
+            Radius:
+            <select
+              value={radiusKm}
+              onChange={(e) => setRadiusKm(Number(e.target.value))}
+              style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #1A1A2E22", fontSize: 13.5 }}
+            >
+              {RADIUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
+        {status === "success" && medicineName && (
+          <div style={{ fontSize: 13, color: "#1A1A2E77", marginBottom: 20 }}>
+            {showClosedToo
+              ? `${stockedPharmacies.length} pharmac${stockedPharmacies.length === 1 ? "y" : "ies"} stock ${medicineName} (${openPharmacies.length} open now)`
+              : `${openPharmacies.length} pharmac${openPharmacies.length === 1 ? "y" : "ies"} open now with ${medicineName} in stock`}
+          </div>
+        )}
       </section>
 
+      {status === "idle" && (
+        <section style={{ padding: "0 56px 70px", maxWidth: 1280, margin: "0 auto", position: "relative", zIndex: 1 }}>
+          <div className="hk-card" style={{ borderRadius: 20, padding: 40, textAlign: "center", color: "#1A1A2E88", fontSize: 14.5 }}>
+            Search a medicine above to see nearby pharmacies that stock it.
+          </div>
+        </section>
+      )}
+
+      {status !== "idle" && (
       <section
         style={{
           padding: "0 56px 70px",
@@ -202,7 +318,14 @@ export default function PharmacyMapPage() {
               </div>
               <div>
                 <div style={{ fontSize: 11, color: "#1A1A2E66", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>Hours</div>
-                <div style={{ fontSize: 14, color: "#1A1A2E", fontWeight: 600 }}>{selected.hours ?? "Not listed"}</div>
+                <div style={{ fontSize: 14, color: "#1A1A2E", fontWeight: 600 }}>
+                  {selected.hours ?? "Not listed"}
+                  {selected.isOpenNow !== null && (
+                    <span style={{ marginLeft: 8, color: selected.isOpenNow ? "#2f8f52" : "#b91c1c" }}>
+                      ({selected.isOpenNow ? "Open now" : "Closed now"})
+                    </span>
+                  )}
+                </div>
               </div>
               {medicineName && (
                 <div>
@@ -238,14 +361,41 @@ export default function PharmacyMapPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: 14, maxHeight: 560, overflowY: "auto", paddingRight: 4 }}>
             {status === "loading" && <p style={{ fontSize: 13.5, color: "#1A1A2E88" }}>Finding nearby pharmacies...</p>}
             {status === "error" && <p style={{ color: "#b91c1c", fontSize: 13.5 }}>{error}</p>}
-            {status === "success" && visiblePharmacies && visiblePharmacies.length === 0 && (
+            {status === "success" && stockedPharmacies.length === 0 && (
               <div className="hk-card" style={{ borderRadius: 20, padding: 34, textAlign: "center", color: "#1A1A2E88", fontSize: 14 }}>
-                {medicineName ? `No pharmacies currently list ${medicineName} in stock.` : "No pharmacies found near you."}
+                No pharmacies currently list {medicineName} in stock.
+              </div>
+            )}
+            {status === "success" && stockedPharmacies.length > 0 && !showClosedToo && closedPharmacies.length > 0 && (
+              <div className="hk-card" style={{ borderRadius: 16, padding: "16px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 13, color: "#1A1A2E88" }}>
+                  {closedPharmacies.length} more pharmac{closedPharmacies.length === 1 ? "y has" : "ies have"} {medicineName} but {closedPharmacies.length === 1 ? "is" : "are"} currently closed.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowClosedToo(true)}
+                  style={{ padding: "7px 16px", border: "1.5px solid #103c1c33", borderRadius: 999, background: "transparent", color: "#103c1c", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter', sans-serif", whiteSpace: "nowrap" }}
+                >
+                  Show them anyway
+                </button>
+              </div>
+            )}
+            {status === "success" && showClosedToo && closedPharmacies.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowClosedToo(false)}
+                style={{ alignSelf: "flex-start", padding: 0, border: "none", background: "none", color: "#103c1c", fontSize: 12.5, fontWeight: 700, cursor: "pointer", fontFamily: "'Inter', sans-serif" }}
+              >
+                Hide closed pharmacies
+              </button>
+            )}
+            {status === "success" && openPharmacies.length === 0 && closedPharmacies.length > 0 && !showClosedToo && (
+              <div className="hk-card" style={{ borderRadius: 20, padding: 34, textAlign: "center", color: "#1A1A2E88", fontSize: 14 }}>
+                None of the pharmacies that stock {medicineName} are open right now.
               </div>
             )}
             {status === "success" &&
-              visiblePharmacies &&
-              visiblePharmacies.map((pharmacy) => (
+              displayedPharmacies.map((pharmacy) => (
                 <div key={pharmacy.id} className="hk-card" style={{ borderRadius: 20, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 10 }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
                     <div style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 15.5, color: "#1A1A2E" }}>{pharmacy.name}</div>
@@ -255,6 +405,11 @@ export default function PharmacyMapPage() {
                   <div style={{ fontSize: 12, color: "#103c1c", fontWeight: 600 }}>
                     {medicineName ? `Confirmed in stock: ${medicineName}` : `${pharmacy.distanceKm} km away`}
                   </div>
+                  {pharmacy.isOpenNow !== null && (
+                    <div style={{ fontSize: 12, fontWeight: 600, color: pharmacy.isOpenNow ? "#2f8f52" : "#b91c1c" }}>
+                      {pharmacy.isOpenNow ? "Open now" : "Closed now"}
+                    </div>
+                  )}
                   <button
                     type="button"
                     onClick={() => setSelectedId(pharmacy.id)}
@@ -268,16 +423,17 @@ export default function PharmacyMapPage() {
         )}
 
         <div style={{ borderRadius: 24, overflow: "hidden", boxShadow: "0 30px 60px -28px rgba(16,60,28,0.35)", border: "1.5px solid #1A1A2E18" }}>
-          {visiblePharmacies && (
+          {status === "success" && (
             <PharmacyMap
               center={selected ? { lat: selected.latitude, lng: selected.longitude } : userCoords}
-              pharmacies={visiblePharmacies}
+              pharmacies={displayedPharmacies}
               scrollWheelZoom
               className="hk-pharmacy-map-large"
             />
           )}
         </div>
       </section>
+      )}
 
       <footer style={{ padding: "22px 64px", background: "#103c1c", position: "relative", zIndex: 1 }}>
         <div style={{ maxWidth: 1360, margin: "0 auto", display: "flex", alignItems: "center", justifyContent: "space-between" }}>

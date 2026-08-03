@@ -1,4 +1,4 @@
-export type ReportStatus = "pending" | "investigating" | "resolved" | "dismissed";
+export type ReportStatus = "pending" | "investigating" | "resolved" | "dismissed" | "escalated";
 
 export interface ReportDetail {
   id: string;
@@ -28,7 +28,7 @@ export interface ReportSummary {
   resolvedAt: string | null;
 }
 
-export type ReportAction = "approve" | "dismiss";
+export type ReportAction = "approve" | "dismiss" | "review" | "escalate";
 
 export interface ReportAdminRow {
   id: string;
@@ -40,6 +40,7 @@ export interface ReportAdminRow {
   purchaseLocation: string | null;
   photoUrl: string | null;
   status: ReportStatus;
+  adminNotes: string | null;
   reporter: { id: string; email: string | null; fullName: string | null } | null;
   createdAt: string;
   updatedAt: string;

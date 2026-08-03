@@ -3,10 +3,12 @@ import type { ChangeEvent, CSSProperties, FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { isAxiosError } from "axios";
 import { Html5Qrcode } from "html5-qrcode";
-import { getMedicineVerificationProfile, getNearbyPharmacies, scanBarcode, searchMedicines } from "../api/medicines";
-import type { MedicineSearchResult, MedicineVerificationProfile, NearbyPharmacy, ScanResult } from "../types/medicine";
+import { getMedicineVerificationProfile, getNearbyPharmacies, scanBarcode } from "../api/medicines";
+import type { MedicineVerificationProfile, NearbyPharmacy, ScanResult } from "../types/medicine";
 import PharmacyMap from "../components/PharmacyMap";
 import AuthNav from "../components/AuthNav";
+import { HTML5_QRCODE_CONFIG } from "../utils/html5QrcodeConfig";
+import { decodeBarcodeFromFile } from "../utils/zxingFileDecoder";
 
 const BARCODE_PATTERN = /^\d{8,13}$/;
 
@@ -18,19 +20,17 @@ function isLikelyMobileDevice(): boolean {
   return /Android|iPhone|iPad|iPod|Mobile|webOS/i.test(navigator.userAgent);
 }
 
-type Step = "scan" | "identified" | "photos" | "package" | "safety" | "pharmacy";
+type Step = "scan" | "identified" | "photos" | "package" | "pharmacy";
 
 const STEPS: Array<{ key: Step; label: string }> = [
   { key: "scan", label: "Scan" },
   { key: "identified", label: "Medicine identified" },
   { key: "photos", label: "Reference photos" },
   { key: "package", label: "Package verification" },
-  { key: "safety", label: "Safety information" },
   { key: "pharmacy", label: "Nearby pharmacy" },
 ];
 
 const CAMERA_ELEMENT_ID = "barcode-reader";
-const FILE_SCAN_ELEMENT_ID = "barcode-file-reader";
 
 function chipStyle(active: boolean): { border: string; background: string; color: string } {
   return active
@@ -38,15 +38,24 @@ function chipStyle(active: boolean): { border: string; background: string; color
     : { border: "#1A1A2E22", background: "transparent", color: "#1A1A2E88" };
 }
 
-function StepIndicator({ current }: { current: Step }) {
+// "scan" is always reachable (it's the start of the flow); every later step
+// needs an identified medicine behind it, so those chips stay disabled until
+// scanResult.medicine exists — jumping to "photos"/"package" still needs to
+// trigger the same profile-loading a normal "Continue" click would.
+function StepIndicator({ current, canNavigate, onSelect }: { current: Step; canNavigate: boolean; onSelect: (step: Step) => void }) {
   const currentIndex = STEPS.findIndex((s) => s.key === current);
   return (
     <div style={{ display: "flex", gap: 10, marginBottom: 30, flexWrap: "wrap" }}>
       {STEPS.map((step, index) => {
-        const s = chipStyle(step.key === current);
+        const active = step.key === current;
+        const s = chipStyle(active);
+        const clickable = step.key === "scan" || canNavigate;
         return (
-          <div
+          <button
             key={step.key}
+            type="button"
+            onClick={() => clickable && onSelect(step.key)}
+            disabled={!clickable}
             style={{
               padding: "10px 18px",
               borderRadius: 999,
@@ -56,10 +65,12 @@ function StepIndicator({ current }: { current: Step }) {
               fontSize: 13,
               fontWeight: 700,
               fontFamily: "'Inter', sans-serif",
+              cursor: clickable ? "pointer" : "not-allowed",
+              opacity: clickable ? 1 : 0.45,
             }}
           >
             {step.label}
-          </div>
+          </button>
         );
       })}
     </div>
@@ -109,25 +120,21 @@ export default function BarcodeScanPage() {
   const [scanError, setScanError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [manualBarcode, setManualBarcode] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<MedicineSearchResult | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
 
   const [isCameraActive, setIsCameraActive] = useState(() => searchParams.get("method") === "camera");
   const [cameraError, setCameraError] = useState<string | null>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  // Every start()/stop() call chains onto this instead of running
+  // independently — see the effect below for why.
+  const cameraOperationChainRef = useRef<Promise<void>>(Promise.resolve());
   const [isMobileDevice] = useState(() => isLikelyMobileDevice());
 
   const [isFileScanning, setIsFileScanning] = useState(false);
   const [fileScanError, setFileScanError] = useState<string | null>(null);
-  const fileScannerRef = useRef<Html5Qrcode | null>(null);
 
   const [profile, setProfile] = useState<MedicineVerificationProfile | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
-
-  const [comparisonChecks, setComparisonChecks] = useState<Record<string, boolean>>({});
 
   const [pharmacies, setPharmacies] = useState<NearbyPharmacy[] | null>(null);
   const [pharmacyStatus, setPharmacyStatus] = useState<"idle" | "loading" | "error" | "success">("idle");
@@ -151,30 +158,50 @@ export default function BarcodeScanPage() {
   useEffect(() => {
     if (!isCameraActive) return;
 
-    const html5QrCode = new Html5Qrcode(CAMERA_ELEMENT_ID);
-    html5QrCodeRef.current = html5QrCode;
+    let cancelled = false; // flips true once *this* invocation's cleanup fires
+    let scanner: Html5Qrcode | null = null;
     let decoded = false;
 
-    html5QrCode
-      .start(
-        { facingMode: "environment" },
-        // qrbox must be square (or close to it) for QR codes — the previous
-        // 250x150 wide-rectangle box clipped the top/bottom off any QR code
-        // sized to fill its width, causing repeated failed scans until the
-        // user happened to reposition it just right. fps bumped slightly for
-        // snappier detection on capable devices.
-        { fps: 15, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          if (decoded) return;
-          decoded = true;
-          setIsCameraActive(false);
-          submitBarcode(decodedText);
-        },
-        () => {
-          // Per-frame decode misses while the user is still aiming the camera; not an error.
-        }
-      )
-      .catch((err) => {
+    // Every start()/stop() — across every effect invocation, including
+    // React 18 StrictMode's dev-only double-invoke (mount → cleanup → mount
+    // again) — chains onto the same ref-held promise instead of running
+    // independently. Without this, a second "mount" starts a brand new
+    // camera while the first one's start() is still pending; the two race
+    // over the same DOM element/camera stream, and whichever loses gets its
+    // <video> ripped out mid-play() (the "AbortError: play() request was
+    // interrupted" you saw) or has stop() called before it ever finished
+    // starting (a synchronous throw — html5-qrcode's stop() throws
+    // directly, not via a rejected promise, so a plain `.catch()` doesn't
+    // catch it, and that used to crash the whole page). Chaining strictly
+    // serializes every operation: this invocation's start only begins once
+    // any prior invocation's full start-then-stop lifecycle has settled.
+    cameraOperationChainRef.current = cameraOperationChainRef.current.then(async () => {
+      if (cancelled) return; // cleanup already fired before our turn came up
+
+      const html5QrCode = new Html5Qrcode(CAMERA_ELEMENT_ID, HTML5_QRCODE_CONFIG);
+      scanner = html5QrCode;
+      html5QrCodeRef.current = html5QrCode;
+
+      try {
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          // qrbox must be square (or close to it) for QR codes — the previous
+          // 250x150 wide-rectangle box clipped the top/bottom off any QR code
+          // sized to fill its width, causing repeated failed scans until the
+          // user happened to reposition it just right. fps bumped slightly for
+          // snappier detection on capable devices.
+          { fps: 15, qrbox: { width: 250, height: 250 } },
+          (decodedText) => {
+            if (decoded) return;
+            decoded = true;
+            setIsCameraActive(false);
+            submitBarcode(decodedText);
+          },
+          () => {
+            // Per-frame decode misses while the user is still aiming the camera; not an error.
+          }
+        );
+      } catch (err) {
         console.error("Failed to start camera", err);
         const message = String(err);
         if (/NotAllowedError|PermissionDenied/i.test(message)) {
@@ -185,20 +212,50 @@ export default function BarcodeScanPage() {
           setCameraError("Unable to access the camera. Enter the code manually below or upload a photo instead.");
         }
         setIsCameraActive(false);
-      });
+        scanner = null;
+        return;
+      }
+
+      if (cancelled) {
+        // Cleanup fired while we were mid-start — stop right away rather
+        // than leaving an orphaned camera stream running.
+        try {
+          await html5QrCode.stop();
+          await html5QrCode.clear();
+        } catch {
+          // already stopped
+        }
+        scanner = null;
+      }
+    });
 
     return () => {
-      html5QrCode
-        .stop()
-        .then(() => html5QrCode.clear())
-        .catch(() => {});
+      cancelled = true;
+      cameraOperationChainRef.current = cameraOperationChainRef.current.then(async () => {
+        if (!scanner) return;
+        try {
+          await scanner.stop();
+          await scanner.clear();
+        } catch {
+          // never actually started, or already stopped
+        }
+        scanner = null;
+      });
     };
   }, [isCameraActive]);
 
-  // Nudges the user toward the manual-entry/upload/search fallbacks if the
-  // camera hasn't found a code within a few seconds, instead of leaving them
-  // staring at a viewfinder with no feedback on what to do next.
+  // Nudges the user toward repositioning the barcode if the camera hasn't
+  // found a code within a few seconds, instead of leaving them staring at a
+  // viewfinder with no feedback on what to do next.
   const [showScanningTip, setShowScanningTip] = useState(false);
+  // A hard stop if scanning drags on — at that point it's very unlikely the
+  // barcode is actually visible to the camera, so we stop guessing silently
+  // and tell the user plainly that it failed and why.
+  const [scanTimedOut, setScanTimedOut] = useState(false);
+  const [scanElapsedSeconds, setScanElapsedSeconds] = useState(0);
+  const SCAN_TIP_SECONDS = 6;
+  const SCAN_TIMEOUT_SECONDS = 25;
+
   // Tracks which isCameraActive value showScanningTip was last reset for, so
   // the reset can happen during render (React's recommended way to adjust
   // state in response to a prop/state change) instead of as a synchronous
@@ -210,11 +267,36 @@ export default function BarcodeScanPage() {
     setShowScanningTip(false);
   }
 
+  // Only resets on activation (not deactivation) — a timeout deliberately
+  // turns isCameraActive off while leaving scanTimedOut true, so the failure
+  // message stays visible until the user tries again.
+  useEffect(() => {
+    if (isCameraActive) {
+      setScanTimedOut(false);
+      setScanElapsedSeconds(0);
+    }
+  }, [isCameraActive]);
+
   useEffect(() => {
     if (!isCameraActive) return;
 
-    const timer = setTimeout(() => setShowScanningTip(true), 7000);
-    return () => clearTimeout(timer);
+    const tipTimer = setTimeout(() => setShowScanningTip(true), SCAN_TIP_SECONDS * 1000);
+    const failureTimer = setTimeout(() => {
+      setScanTimedOut(true);
+      setIsCameraActive(false);
+    }, SCAN_TIMEOUT_SECONDS * 1000);
+    // A successful decode also flips isCameraActive off, which tears this
+    // effect down via the cleanup below — so failureTimer only ever fires
+    // when nothing was found in time.
+    const tickTimer = setInterval(() => {
+      setScanElapsedSeconds((prev) => Math.min(prev + 1, SCAN_TIMEOUT_SECONDS));
+    }, 1000);
+
+    return () => {
+      clearTimeout(tipTimer);
+      clearTimeout(failureTimer);
+      clearInterval(tickTimer);
+    };
   }, [isCameraActive]);
 
   function resetFlow() {
@@ -222,15 +304,11 @@ export default function BarcodeScanPage() {
     setScanResult(null);
     setScanError(null);
     setManualBarcode("");
-    setSearchQuery("");
-    setSearchResults(null);
-    setSearchError(null);
     setIsCameraActive(false);
     setCameraError(null);
     setFileScanError(null);
     setProfile(null);
     setProfileError(null);
-    setComparisonChecks({});
     setPharmacies(null);
     setPharmacyStatus("idle");
     setPharmacyError(null);
@@ -285,33 +363,6 @@ export default function BarcodeScanPage() {
     submitBarcode(manualBarcode);
   }
 
-  async function runMedicineSearch(query: string, targetPage = 1) {
-    if (!query.trim()) {
-      setSearchError("Please enter a medicine name.");
-      setSearchResults(null);
-      return;
-    }
-
-    setIsSearching(true);
-    setSearchError(null);
-
-    try {
-      const data = await searchMedicines(query.trim(), targetPage);
-      setSearchResults(data);
-    } catch (err) {
-      console.error("Medicine search failed", err);
-      setSearchError("Unable to search right now. Please try again.");
-      setSearchResults(null);
-    } finally {
-      setIsSearching(false);
-    }
-  }
-
-  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    runMedicineSearch(searchQuery);
-  }
-
   function toggleCamera() {
     setCameraError(null);
     setIsCameraActive((prev) => !prev);
@@ -326,20 +377,21 @@ export default function BarcodeScanPage() {
     setFileScanError(null);
     setIsFileScanning(true);
 
+    console.log("[photo-scan] file selected", { name: file.name, type: file.type, sizeBytes: file.size });
+
     try {
-      fileScannerRef.current ??= new Html5Qrcode(FILE_SCAN_ELEMENT_ID);
-      const decodedText = await fileScannerRef.current.scanFile(file, false);
+      const decodedText = await decodeBarcodeFromFile(file);
+      console.log("[photo-scan] decoded:", decodedText);
       await submitBarcode(decodedText);
     } catch (err) {
-      console.error("Failed to read code from image", err);
+      console.error("[photo-scan] Failed to read code from image — full error object:", err);
       setFileScanError("Couldn't find a scannable code in that photo. Try a clearer, well-lit shot square to the package.");
     } finally {
       setIsFileScanning(false);
     }
   }
 
-  async function goToPhotos() {
-    setStep("photos");
+  async function ensureProfileLoaded() {
     if (profile || !scanResult?.medicine) return;
 
     setProfileLoading(true);
@@ -355,14 +407,35 @@ export default function BarcodeScanPage() {
     }
   }
 
-  function toggleComparisonCheck(label: string) {
-    setComparisonChecks((prev) => ({ ...prev, [label]: !prev[label] }));
+  function goToPhotos() {
+    setStep("photos");
+    ensureProfileLoaded();
   }
 
   function goToPharmacyStep() {
     setStep("pharmacy");
     if (pharmacyStatus !== "idle") return;
     findNearbyPharmacies();
+  }
+
+  // Lets the step chips act as real tabs: "scan" is always reachable, every
+  // later step needs an identified medicine (StepIndicator already disables
+  // those chips otherwise), and jumping straight to "photos"/"package"
+  // triggers the same profile load a normal "Continue" click would.
+  function handleStepSelect(target: Step) {
+    if (target === "scan") {
+      setStep("scan");
+      return;
+    }
+    if (!scanResult?.medicine) return;
+    if (target === "pharmacy") {
+      goToPharmacyStep();
+      return;
+    }
+    if (target === "photos" || target === "package") {
+      ensureProfileLoaded();
+    }
+    setStep(target);
   }
 
   function findNearbyPharmacies() {
@@ -421,7 +494,11 @@ export default function BarcodeScanPage() {
           Verify barcodes from the local Hakikisha database only.
         </p>
 
-        {step !== "scan" && <div style={{ display: "flex", justifyContent: "center" }}><StepIndicator current={step} /></div>}
+        {step !== "scan" && (
+          <div style={{ display: "flex", justifyContent: "center" }}>
+            <StepIndicator current={step} canNavigate={!!scanResult?.medicine} onSelect={handleStepSelect} />
+          </div>
+        )}
 
         {step === "scan" && (
           <div style={panelStyle}>
@@ -433,9 +510,12 @@ export default function BarcodeScanPage() {
 
             {isCameraActive && (
               <>
-                <div style={{ maxWidth: 320, margin: "0 auto 16px", borderRadius: 16, overflow: "hidden" }}>
+                <div style={{ maxWidth: 320, margin: "0 auto 10px", borderRadius: 16, overflow: "hidden" }}>
                   <div id={CAMERA_ELEMENT_ID} />
                 </div>
+                <p style={{ textAlign: "center", fontSize: 12, color: "#1A1A2E66", margin: "0 0 10px" }}>
+                  Scanning... {scanElapsedSeconds}s / {SCAN_TIMEOUT_SECONDS}s
+                </p>
                 <p style={{ textAlign: "center", fontSize: 13.5, color: "#1A1A2E88", maxWidth: 380, margin: "0 auto 10px" }}>
                   Hold your phone steady, about 10–15cm from the package. Center the QR code in the box, with
                   even lighting and no glare.
@@ -449,11 +529,34 @@ export default function BarcodeScanPage() {
                 )}
                 {showScanningTip && (
                   <p style={{ textAlign: "center", fontSize: 13, color: "#92400e", background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 10, padding: "8px 12px", maxWidth: 380, margin: "0 auto 10px" }}>
-                    Still not scanning? Try moving a little closer or further away, or use manual entry, photo
-                    upload, or search below instead.
+                    Can't see the barcode? Try placing it flat, centered in the box, and closer to the camera —
+                    a small repositioning usually fixes it.
                   </p>
                 )}
               </>
+            )}
+            {scanTimedOut && (
+              <div
+                style={{
+                  textAlign: "center",
+                  background: "#ff6b6b1a",
+                  border: "1.5px solid #ff6b6b55",
+                  borderRadius: 14,
+                  padding: "14px 18px",
+                  maxWidth: 380,
+                  margin: "0 auto 16px",
+                }}
+              >
+                <p style={{ margin: "0 0 6px", fontSize: 14, fontWeight: 700, color: "#b8862f" }}>Scan failed</p>
+                <p style={{ margin: "0 0 12px", fontSize: 13.5, color: "#1A1A2E" }}>
+                  We couldn't get a clear view of the barcode in time. This usually means it wasn't fully in
+                  frame, was too far away, or was catching glare from a light — try repositioning it, or use
+                  manual entry or photo upload below instead.
+                </p>
+                <button type="button" onClick={toggleCamera} className="hk-neu-btn" style={{ ...primaryButtonStyle, padding: "10px 22px", fontSize: 13.5 }}>
+                  Try again
+                </button>
+              </div>
             )}
             {cameraError && <p style={{ textAlign: "center", color: "#b91c1c", fontSize: 13.5 }}>{cameraError}</p>}
 
@@ -481,48 +584,6 @@ export default function BarcodeScanPage() {
                 {isFileScanning ? "Reading photo..." : "Upload photo"}
                 <input type="file" accept="image/*" onChange={handleFileUpload} disabled={isFileScanning} hidden />
               </label>
-              {/* Kept mounted (hidden) so the file-scan Html5Qrcode instance always has an element to bind to. */}
-              <div id={FILE_SCAN_ELEMENT_ID} style={{ display: "none" }} />
-            </div>
-
-            <div style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid #1A1A2E15" }}>
-              <p style={{ fontSize: 13.5, color: "#1A1A2E88", marginBottom: 10 }}>Still stuck? Search for the medicine by name instead.</p>
-              <form style={{ display: "flex", gap: 10, flexWrap: "wrap" }} onSubmit={handleSearchSubmit}>
-                <input
-                  className="hk-neu-field"
-                  type="text"
-                  placeholder="e.g. Panadol"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  style={{ ...fieldInputStyle, flex: 1, minWidth: 220 }}
-                />
-                <button type="submit" disabled={isSearching} className="hk-neu-btn" style={primaryButtonStyle}>
-                  {isSearching ? "Searching..." : "Search"}
-                </button>
-              </form>
-              {searchError && <p style={{ color: "#b91c1c", fontSize: 13.5 }}>{searchError}</p>}
-              {searchResults && searchResults.results.length === 0 && (
-                <p style={{ fontSize: 13.5, color: "#1A1A2E88" }}>No medicines matched that search.</p>
-              )}
-              {searchResults && searchResults.results.length > 0 && (
-                <ul style={{ listStyle: "none", padding: 0, margin: "12px 0 0", display: "flex", flexDirection: "column", gap: 10 }}>
-                  {searchResults.results.map((medicine) => (
-                    <li key={medicine.id}>
-                      <Link
-                        to={`/medicines/${medicine.id}`}
-                        className="hk-card"
-                        style={{ display: "block", borderRadius: 14, padding: "12px 16px", color: "#1A1A2E" }}
-                      >
-                        <div style={{ fontWeight: 700, fontSize: 14.5 }}>{medicine.name}</div>
-                        <div style={{ fontSize: 12.5, color: "#1A1A2E77" }}>Manufacturer: {medicine.manufacturer}</div>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <p style={{ marginTop: 10 }}>
-                <Link to="/search" style={{ fontSize: 13.5, fontWeight: 600, color: "#103c1c" }}>Open full search page</Link>
-              </p>
             </div>
 
             {fileScanError && <p style={{ color: "#b91c1c", fontSize: 13.5, textAlign: "center", marginTop: 14 }}>{fileScanError}</p>}
@@ -544,10 +605,7 @@ export default function BarcodeScanPage() {
                   {scanResult.message ?? "This barcode does not exist in the Hakikisha database."}
                 </p>
                 <p style={{ margin: "0 0 4px", fontSize: 13, color: "#1A1A2E88" }}>This does NOT necessarily mean the medicine is counterfeit.</p>
-                <p style={{ margin: "0 0 14px", fontSize: 13, color: "#1A1A2E88" }}>Please verify with the manufacturer or pharmacy.</p>
-                <Link to="/report" state={{ scanId: scanResult.scanId }} style={{ fontSize: 13.5, fontWeight: 700, color: "#103c1c" }}>
-                  Report this as counterfeit
-                </Link>
+                <p style={{ margin: 0, fontSize: 13, color: "#1A1A2E88" }}>Please verify with the manufacturer or pharmacy.</p>
               </div>
             )}
           </div>
@@ -617,13 +675,6 @@ export default function BarcodeScanPage() {
               >
                 View full details
               </Link>
-              <Link
-                to="/report"
-                state={{ scanId: scanResult.scanId, productName: scanResult.medicine.name }}
-                style={{ padding: "13px 24px", borderRadius: 999, border: "1.5px solid #ff6b6b55", background: "#ff6b6b12", fontSize: 14, fontWeight: 700, color: "#c23a3a" }}
-              >
-                Report this as counterfeit
-              </Link>
             </div>
           </div>
         )}
@@ -635,26 +686,42 @@ export default function BarcodeScanPage() {
             </h2>
             {profileLoading && <p style={{ fontSize: 13.5, color: "#1A1A2E88" }}>Loading reference photos...</p>}
             {profileError && <p style={{ color: "#b91c1c", fontSize: 13.5 }}>{profileError}</p>}
-            {profile && (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 22 }}>
-                {(["front", "back"] as const).map((angle) => (
-                  <div key={angle} className="hk-neu-panel" style={{ borderRadius: 16, padding: 14, textAlign: "center" }}>
-                    <div style={{ fontSize: 12, color: "#1A1A2E66", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
-                      {angle === "front" ? "Front" : "Back"}
-                    </div>
-                    {profile.photos[angle] ? (
+            {profile && (() => {
+              // Only render panels for angles that actually have a photo —
+              // e.g. most medicines here only have a package shot, not a
+              // separate tablet close-up, and there's no placeholder to fall
+              // back to for a missing one anymore.
+              const availableAngles = (["tablet", "package"] as const).filter((angle) => profile.photos[angle]);
+
+              if (availableAngles.length === 0) {
+                return (
+                  <p style={{ fontSize: 13.5, color: "#1A1A2E88", marginBottom: 22 }}>
+                    No reference photos available for this medicine yet.
+                  </p>
+                );
+              }
+
+              return (
+                // Columns capped at 260px (not 1fr) so a single photo doesn't
+                // stretch to fill the whole ~600px panel width — most source
+                // photos are modest resolution (many under 500px wide) and
+                // visibly blur when upscaled that far.
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 260px))", gap: 16, marginBottom: 22, justifyContent: "center" }}>
+                  {availableAngles.map((angle) => (
+                    <div key={angle} className="hk-neu-panel" style={{ borderRadius: 16, padding: 14, textAlign: "center" }}>
+                      <div style={{ fontSize: 12, color: "#1A1A2E66", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+                        {angle === "tablet" ? "Tablet" : "Package"}
+                      </div>
                       <img
                         src={profile.photos[angle] as string}
-                        alt={`${profile.medicine.name} ${angle} packaging`}
+                        alt={`${profile.medicine.name} ${angle}`}
                         style={{ width: "100%", height: "auto", borderRadius: 10 }}
                       />
-                    ) : (
-                      <p style={{ fontSize: 13, color: "#1A1A2E88" }}>No {angle} photo available.</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
             <button type="button" onClick={() => setStep("package")} className="hk-neu-btn" style={primaryButtonStyle}>
               Continue to package verification
             </button>
@@ -694,34 +761,6 @@ export default function BarcodeScanPage() {
             ) : (
               <p style={{ fontSize: 13.5, color: "#1A1A2E88" }}>No package verification guidance available for this medicine yet.</p>
             )}
-            <button type="button" onClick={() => setStep("safety")} className="hk-neu-btn" style={primaryButtonStyle}>
-              Continue to safety information
-            </button>
-          </div>
-        )}
-
-        {step === "safety" && (
-          <div style={panelStyle}>
-            <h2 style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 19, color: "#1A1A2E", margin: "0 0 18px" }}>
-              Things to Compare
-            </h2>
-            {profile && profile.safetyComparison.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 22 }}>
-                {profile.safetyComparison.map((label) => (
-                  <label key={label} style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
-                    <input
-                      type="checkbox"
-                      checked={!!comparisonChecks[label]}
-                      onChange={() => toggleComparisonCheck(label)}
-                      style={{ width: 18, height: 18, accentColor: "#103c1c", flexShrink: 0 }}
-                    />
-                    <span style={{ fontSize: 14, color: "#1A1A2E" }}>{label}</span>
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <p style={{ fontSize: 13.5, color: "#1A1A2E88" }}>No comparison points available for this medicine yet.</p>
-            )}
             <button type="button" onClick={goToPharmacyStep} className="hk-neu-btn" style={primaryButtonStyle}>
               Continue to nearby pharmacy
             </button>
@@ -742,22 +781,33 @@ export default function BarcodeScanPage() {
                 </button>
               </>
             )}
-            {pharmacyStatus === "success" && pharmacies && pharmacies.length === 0 && (
-              <p style={{ fontSize: 13.5, color: "#1A1A2E88" }}>No pharmacies found near you.</p>
-            )}
-            {pharmacyStatus === "success" && pharmacies && pharmacies.length > 0 && (
-              <>
-                {userCoords && <PharmacyMap center={userCoords} pharmacies={pharmacies} />}
-                <div style={{ display: "flex", flexDirection: "column", gap: 12, margin: "16px 0 22px" }}>
-                  {pharmacies.map((pharmacy) => (
-                    <div key={pharmacy.id} className="hk-card" style={{ borderRadius: 18, padding: "16px 20px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                        <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 14.5, color: "#1A1A2E" }}>
-                          {pharmacy.name}
-                        </span>
-                        <span style={{ fontSize: 13, color: "#1A1A2E77" }}>{pharmacy.distanceKm} km</span>
-                      </div>
-                      {pharmacy.stocksMedicine && (
+            {pharmacyStatus === "success" && pharmacies && (() => {
+              // Only pharmacies confirmed to stock this medicine are worth
+              // showing here — stocksMedicine is a real boolean (not null)
+              // whenever a medicine id was passed, which is always true on
+              // this step.
+              const stockedPharmacies = pharmacies.filter((pharmacy) => pharmacy.stocksMedicine);
+
+              if (stockedPharmacies.length === 0) {
+                return (
+                  <p style={{ fontSize: 13.5, color: "#1A1A2E88" }}>
+                    No nearby pharmacies have this medicine in stock right now.
+                  </p>
+                );
+              }
+
+              return (
+                <>
+                  {userCoords && <PharmacyMap center={userCoords} pharmacies={stockedPharmacies} />}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12, margin: "16px 0 22px" }}>
+                    {stockedPharmacies.map((pharmacy) => (
+                      <div key={pharmacy.id} className="hk-card" style={{ borderRadius: 18, padding: "16px 20px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                          <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 14.5, color: "#1A1A2E" }}>
+                            {pharmacy.name}
+                          </span>
+                          <span style={{ fontSize: 13, color: "#1A1A2E77" }}>{pharmacy.distanceKm} km</span>
+                        </div>
                         <span
                           style={{
                             display: "inline-block",
@@ -772,14 +822,14 @@ export default function BarcodeScanPage() {
                         >
                           Confirmed in stock
                         </span>
-                      )}
-                      <div style={{ fontSize: 13, color: "#1A1A2E77", marginTop: 6 }}>{pharmacy.address}</div>
-                      {pharmacy.phone && <div style={{ fontSize: 13, color: "#1A1A2E77" }}>{pharmacy.phone}</div>}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+                        <div style={{ fontSize: 13, color: "#1A1A2E77", marginTop: 6 }}>{pharmacy.address}</div>
+                        {pharmacy.phone && <div style={{ fontSize: 13, color: "#1A1A2E77" }}>{pharmacy.phone}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
             <button type="button" onClick={resetFlow} className="hk-neu-btn" style={primaryButtonStyle}>
               Scan another barcode
             </button>

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import pool from "../db/pool";
+import { isOpenNow } from "../lib/pharmacyHours";
 
 const router = Router();
 
@@ -31,6 +32,7 @@ router.get("/nearby", async (req, res) => {
   const lng = parseCoordinate(req.query.lng);
   const radiusKm = parseCoordinate(req.query.radiusKm) ?? DEFAULT_RADIUS_KM;
   const { medicineId } = req.query;
+  const openNowOnly = req.query.openNow === "true";
 
   if (lat === null || lng === null) {
     res.status(400).json({ error: "lat and lng are required" });
@@ -70,19 +72,27 @@ router.get("/nearby", async (req, res) => {
     [lat, lng, EARTH_RADIUS_KM, radiusKm, medicineId ?? null]
   );
 
-  res.status(200).json({
-    results: rows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      address: row.address,
-      latitude: row.latitude,
-      longitude: row.longitude,
-      phone: row.phone,
-      hours: row.hours,
-      distanceKm: Math.round(row.distance_km * 10) / 10,
-      stocksMedicine: row.stocks_medicine,
-    })),
-  });
+  // Computed here (rather than in SQL) since it's just string parsing —
+  // always attached so the UI can show an open/closed tag even when the
+  // openNow filter itself isn't active.
+  let results = rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    address: row.address,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    phone: row.phone,
+    hours: row.hours,
+    distanceKm: Math.round(row.distance_km * 10) / 10,
+    stocksMedicine: row.stocks_medicine,
+    isOpenNow: isOpenNow(row.hours),
+  }));
+
+  if (openNowOnly) {
+    results = results.filter((pharmacy) => pharmacy.isOpenNow === true);
+  }
+
+  res.status(200).json({ results });
 });
 
 export default router;

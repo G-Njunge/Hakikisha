@@ -10,11 +10,30 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const MAX_PHOTO_LENGTH = 6_000_000;
 const PAGE_SIZE = 20;
 
-const REPORT_ACTIONS = ["approve", "dismiss"] as const;
+const REPORT_ACTIONS = ["approve", "dismiss", "review", "escalate"] as const;
 type ReportAction = (typeof REPORT_ACTIONS)[number];
+
+// review/escalate are non-terminal — a report can still move on from them,
+// so they update `status` only. approve/dismiss are terminal and additionally
+// stamp resolved_by/resolved_at, which should mean "when this was actually
+// concluded," not "last touched."
+const ACTION_TO_STATUS: Record<ReportAction, string> = {
+  approve: "resolved",
+  dismiss: "dismissed",
+  review: "investigating",
+  escalate: "escalated",
+};
+const TERMINAL_ACTIONS = new Set<ReportAction>(["approve", "dismiss"]);
 
 function isReportAction(value: unknown): value is ReportAction {
   return typeof value === "string" && (REPORT_ACTIONS as readonly string[]).includes(value);
+}
+
+const REPORT_STATUSES = ["pending", "investigating", "resolved", "dismissed", "escalated"] as const;
+type ReportStatusValue = (typeof REPORT_STATUSES)[number];
+
+function isReportStatus(value: unknown): value is ReportStatusValue {
+  return typeof value === "string" && (REPORT_STATUSES as readonly string[]).includes(value);
 }
 
 function parsePage(value: unknown): number {
@@ -32,6 +51,7 @@ interface ReportRow {
   purchase_location: string | null;
   photo_url: string | null;
   status: string;
+  admin_notes: string | null;
   resolved_by: string | null;
   resolved_at: string | null;
   created_at: string;
@@ -94,6 +114,7 @@ function toReportAdminResponse(row: ReportAdminRow) {
     purchaseLocation: row.purchase_location,
     photoUrl: row.photo_url,
     status: row.status,
+    adminNotes: row.admin_notes,
     reporter: row.reported_by
       ? { id: row.reported_by, email: row.reporter_email, fullName: row.reporter_full_name }
       : null,
@@ -212,9 +233,27 @@ router.get("/my", authenticate, async (req, res) => {
   res.status(200).json({ reports: rows.map(toReportSummary) });
 });
 
+router.get("/unread-count", authenticate, requireAdmin, async (req, res) => {
+  const { rows } = await pool.query<{ count: string }>(
+    `SELECT count(*) FROM reports r
+     WHERE r.created_at > COALESCE(
+       (SELECT reports_last_viewed_at FROM users WHERE id = $1),
+       '-infinity'
+     )`,
+    [req.user?.sub]
+  );
+
+  res.status(200).json({ count: Number(rows[0].count) });
+});
+
 router.get("/", authenticate, requireAdmin, async (req, res) => {
   const currentPage = parsePage(req.query.page);
   const offset = (currentPage - 1) * PAGE_SIZE;
+  const statusFilter = isReportStatus(req.query.status) ? req.query.status : null;
+  const sortDirection = req.query.sort === "oldest" ? "ASC" : "DESC";
+
+  const whereClause = statusFilter ? "WHERE r.status = $3" : "";
+  const listParams = statusFilter ? [PAGE_SIZE, offset, statusFilter] : [PAGE_SIZE, offset];
 
   const [{ rows }, countResult] = await Promise.all([
     pool.query<ReportAdminRow>(
@@ -224,11 +263,20 @@ router.get("/", authenticate, requireAdmin, async (req, res) => {
        LEFT JOIN scans s ON s.id = r.scan_id
        LEFT JOIN batch_records br ON br.id = s.batch_record_id
        LEFT JOIN medicines m ON m.id = br.medicine_id
-       ORDER BY r.created_at DESC
+       ${whereClause}
+       ORDER BY r.created_at ${sortDirection}
        LIMIT $1 OFFSET $2`,
-      [PAGE_SIZE, offset]
+      listParams
     ),
-    pool.query<{ count: string }>("SELECT count(*) FROM reports"),
+    pool.query<{ count: string }>(
+      `SELECT count(*) FROM reports ${statusFilter ? "WHERE status = $1" : ""}`,
+      statusFilter ? [statusFilter] : []
+    ),
+    // Opening the admin reports table is what "marks it read" — best-effort,
+    // never blocks the response the admin is waiting on.
+    pool.query("UPDATE users SET reports_last_viewed_at = now() WHERE id = $1", [req.user?.sub]).catch((err) => {
+      console.error("Failed to update reports_last_viewed_at", err);
+    }),
   ]);
 
   const totalCount = Number(countResult.rows[0].count);
@@ -242,26 +290,55 @@ router.get("/", authenticate, requireAdmin, async (req, res) => {
 
 router.patch("/:id", authenticate, requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const { action } = req.body ?? {};
+  const { action, notes } = req.body ?? {};
 
   if (typeof id !== "string" || !UUID_PATTERN.test(id)) {
     res.status(400).json({ error: "Invalid report id" });
     return;
   }
 
-  if (!isReportAction(action)) {
-    res.status(400).json({ error: "action must be 'approve' or 'dismiss'" });
+  const hasAction = action !== undefined;
+  const hasNotes = notes !== undefined;
+
+  if (!hasAction && !hasNotes) {
+    res.status(400).json({ error: "Provide action and/or notes" });
     return;
   }
 
-  const newStatus = action === "approve" ? "resolved" : "dismissed";
+  if (hasAction && !isReportAction(action)) {
+    res.status(400).json({ error: `action must be one of: ${REPORT_ACTIONS.join(", ")}` });
+    return;
+  }
 
-  const { rows } = await pool.query<ReportRow>(
-    `UPDATE reports
-     SET status = $1, resolved_by = $2, resolved_at = now(), updated_at = now()
-     WHERE id = $3
-     RETURNING *`,
-    [newStatus, req.user?.sub ?? null, id]
+  if (hasNotes && typeof notes !== "string") {
+    res.status(400).json({ error: "notes must be a string" });
+    return;
+  }
+
+  const setClauses = ["updated_at = now()"];
+  const params: unknown[] = [];
+
+  if (hasAction) {
+    params.push(ACTION_TO_STATUS[action as ReportAction]);
+    setClauses.push(`status = $${params.length}`);
+
+    if (TERMINAL_ACTIONS.has(action as ReportAction)) {
+      params.push(req.user?.sub ?? null);
+      setClauses.push(`resolved_by = $${params.length}`, "resolved_at = now()");
+    }
+  }
+
+  if (hasNotes) {
+    params.push(notes);
+    setClauses.push(`admin_notes = $${params.length}`);
+  }
+
+  params.push(id);
+  const idParamIndex = params.length;
+
+  const { rows } = await pool.query<{ id: string }>(
+    `UPDATE reports SET ${setClauses.join(", ")} WHERE id = $${idParamIndex} RETURNING id`,
+    params
   );
 
   if (rows.length === 0) {
@@ -269,7 +346,22 @@ router.patch("/:id", authenticate, requireAdmin, async (req, res) => {
     return;
   }
 
-  res.status(200).json({ report: toReportDetail(rows[0]) });
+  // Re-fetched with the same joins as the admin list endpoint (rather than
+  // trusting UPDATE...RETURNING *, which only has the reports table's own
+  // columns) so the response includes reporter identity + medicine name —
+  // the admin UI updates its local row from this response without a refetch.
+  const { rows: adminRows } = await pool.query<ReportAdminRow>(
+    `SELECT r.*, u.email AS reporter_email, u.full_name AS reporter_full_name, m.name AS scan_medicine_name
+     FROM reports r
+     LEFT JOIN users u ON u.id = r.reported_by
+     LEFT JOIN scans s ON s.id = r.scan_id
+     LEFT JOIN batch_records br ON br.id = s.batch_record_id
+     LEFT JOIN medicines m ON m.id = br.medicine_id
+     WHERE r.id = $1`,
+    [rows[0].id]
+  );
+
+  res.status(200).json({ report: toReportAdminResponse(adminRows[0]) });
 });
 
 export default router;

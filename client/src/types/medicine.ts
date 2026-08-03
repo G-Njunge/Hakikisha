@@ -39,8 +39,8 @@ export interface BarcodeVerificationResult {
 export interface MedicineVerificationProfile {
   medicine: Medicine;
   photos: {
-    front: string | null;
-    back: string | null;
+    tablet: string | null;
+    package: string | null;
   };
   packageVerification: string[];
   safetyComparison: string[];
@@ -58,6 +58,9 @@ export interface NearbyPharmacy {
   // null when no medicineId was passed to the nearby-pharmacies request —
   // otherwise a flag (not a filter) for whether stock is on file, sorted first.
   stocksMedicine: boolean | null;
+  // null when `hours` is missing or in an unrecognized format — "unknown,"
+  // not "closed."
+  isOpenNow: boolean | null;
 }
 
 export type ScanStatus = "VERIFIED" | "UNVERIFIED";

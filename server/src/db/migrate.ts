@@ -12,10 +12,14 @@
 
 import dotenv from "dotenv";
 import { Pool } from "pg";
+import { sslConfigFor } from "./sslConfig";
 
 dotenv.config();
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: sslConfigFor(process.env.DATABASE_URL),
+});
 
 const ALREADY_EXISTS = "42710"; // duplicate_object (type, constraint, ...)
 
@@ -32,6 +36,23 @@ async function run(label: string, sql: string) {
     console.error(`FAIL  ${label}`);
     throw err;
   }
+}
+
+// ALTER TYPE ... RENAME VALUE has no IF EXISTS form and errors if the old
+// label is already gone (e.g. a second run, or a fresh schema.sql database
+// that was never called 'front'/'back' to begin with) — checked against
+// pg_enum directly instead of relying on run()'s error-code swallowing.
+async function renameEnumValueIfNeeded(enumType: string, oldValue: string, newValue: string) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid WHERE t.typname = $1 AND e.enumlabel = $2`,
+    [enumType, oldValue]
+  );
+  if (rows.length === 0) {
+    console.log(`SKIP  ALTER TYPE ${enumType} RENAME VALUE '${oldValue}' TO '${newValue}' (already renamed)`);
+    return;
+  }
+  await pool.query(`ALTER TYPE ${enumType} RENAME VALUE '${oldValue}' TO '${newValue}'`);
+  console.log(`OK    ALTER TYPE ${enumType} RENAME VALUE '${oldValue}' TO '${newValue}'`);
 }
 
 async function main() {
@@ -175,10 +196,31 @@ async function main() {
   await pool.query(`ALTER TABLE medicines ADD CONSTRAINT medicines_barcode_check CHECK (barcode ~ '^[0-9]{8,13}$')`);
   console.log("OK    ALTER TABLE medicines: widened medicines_barcode_check to 8-13 digits");
 
+  // --- medicine_photos: front/back -> tablet/package (real product photos
+  //     replacing the placehold.co placeholders) ---
+  await renameEnumValueIfNeeded("photo_angle", "front", "tablet");
+  await renameEnumValueIfNeeded("photo_angle", "back", "package");
+
   // --- refresh_tokens.remember ("remember me" carried through rotation) ---
   await run(
     "ALTER TABLE refresh_tokens ADD COLUMN remember",
     `ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS remember BOOLEAN NOT NULL DEFAULT false`
+  );
+
+  // --- report_status: add 'escalated' + reports.admin_notes ---
+  await run(
+    "ALTER TYPE report_status ADD VALUE 'escalated'",
+    `ALTER TYPE report_status ADD VALUE IF NOT EXISTS 'escalated'`
+  );
+  await run(
+    "ALTER TABLE reports ADD COLUMN admin_notes",
+    `ALTER TABLE reports ADD COLUMN IF NOT EXISTS admin_notes TEXT`
+  );
+
+  // --- users.reports_last_viewed_at (admin "unread reports" indicator) ---
+  await run(
+    "ALTER TABLE users ADD COLUMN reports_last_viewed_at",
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS reports_last_viewed_at TIMESTAMPTZ`
   );
 
   console.log("\nMigration complete.");
