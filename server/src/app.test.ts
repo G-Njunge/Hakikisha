@@ -123,14 +123,23 @@ describe("Login", () => {
         .send({ email: "jane@example.com", password: "password123", remember: true });
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual({ user: expect.objectContaining({ email: "jane@example.com" }) });
+      expect(res.body).toEqual({
+        user: expect.objectContaining({ email: "jane@example.com" }),
+        csrfToken: expect.any(String),
+      });
       expect(res.body.accessToken).toBeUndefined();
       expect(res.body.refreshToken).toBeUndefined();
 
       const cookies = res.headers["set-cookie"] as unknown as string[];
       expect(cookies.some((c) => c.startsWith("hakikisha_access_token=") && /HttpOnly/i.test(c))).toBe(true);
       expect(cookies.some((c) => c.startsWith("hakikisha_refresh_token=") && /HttpOnly/i.test(c))).toBe(true);
-      expect(cookies.some((c) => c.startsWith("hakikisha_csrf_token=") && !/HttpOnly/i.test(c))).toBe(true);
+      // Also present in the body (see /login's own comment) — the client
+      // can't read this cookie via document.cookie when cross-origin, so the
+      // body is the actual source of truth it relies on.
+      const csrfCookie = cookies.find((c) => c.startsWith("hakikisha_csrf_token="));
+      expect(csrfCookie).toBeDefined();
+      expect(csrfCookie).not.toMatch(/HttpOnly/i);
+      expect(csrfCookie).toContain(`hakikisha_csrf_token=${res.body.csrfToken}`);
     },
     15000
   );

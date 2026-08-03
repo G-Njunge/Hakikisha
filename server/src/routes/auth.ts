@@ -10,7 +10,7 @@ import {
   verifyEmailVerificationToken,
 } from "../lib/tokens";
 import { sendVerificationEmail } from "../lib/email";
-import { REFRESH_COOKIE, clearAuthCookies, generateCsrfToken, setAuthCookies } from "../lib/cookies";
+import { CSRF_COOKIE, REFRESH_COOKIE, clearAuthCookies, generateCsrfToken, setAuthCookies } from "../lib/cookies";
 import { validatePasswordStrength } from "../lib/passwordPolicy";
 
 const router = Router();
@@ -240,7 +240,13 @@ router.post("/login", async (req, res) => {
 
   setAuthCookies(res, { accessToken, refreshToken, csrfToken, remember: rememberChoice });
 
-  res.status(200).json({ user: toUserResponse(user) });
+  // Also returned in the body (not just set as a cookie) because the client
+  // and server are on different origins in production — a cookie set by
+  // this response is invisible to document.cookie on the client's own page,
+  // even though the browser still attaches it automatically to later
+  // requests here. The client keeps this in memory and echoes it back as
+  // the X-CSRF-Token header instead of trying to read the cookie itself.
+  res.status(200).json({ user: toUserResponse(user), csrfToken });
 });
 
 router.post("/refresh", async (req, res) => {
@@ -279,7 +285,10 @@ router.post("/refresh", async (req, res) => {
 
   setAuthCookies(res, { accessToken, refreshToken: newRefreshToken, csrfToken, remember: stored.remember });
 
-  res.status(204).send();
+  // 200 + body rather than the previous 204 — the client needs the rotated
+  // csrfToken back (see the /login comment above for why the cookie alone
+  // isn't enough cross-origin), and 204 responses can't carry a body.
+  res.status(200).json({ csrfToken });
 });
 
 router.post("/logout", authenticate, async (req, res) => {
@@ -314,7 +323,11 @@ router.get("/me", authenticate, async (req, res) => {
     return;
   }
 
-  res.status(200).json({ user: toUserResponse(rows[0]) });
+  // Lets the client resync its in-memory CSRF token on page load (e.g. after
+  // a fresh page load/reload, which drops anything held in JS memory) — the
+  // cookie itself isn't readable by the client's JS cross-origin, but it's
+  // still attached to this request, so the server can just read it back.
+  res.status(200).json({ user: toUserResponse(rows[0]), csrfToken: req.cookies?.[CSRF_COOKIE] ?? null });
 });
 
 router.patch("/me", authenticate, async (req, res) => {

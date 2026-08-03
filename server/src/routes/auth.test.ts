@@ -119,7 +119,10 @@ describe("POST /api/auth/refresh", () => {
       .post("/api/auth/refresh")
       .set("Cookie", "hakikisha_refresh_token=some-valid-token");
 
-    expect(res.status).toBe(204);
+    expect(res.status).toBe(200);
+    // Returned in the body too (not just the cookie) — the client can't read
+    // this cookie via document.cookie when client/server are cross-origin.
+    expect(res.body).toEqual({ csrfToken: expect.any(String) });
     const cookies = res.headers["set-cookie"] as unknown as string[];
     expect(cookies.some((c) => c.startsWith("hakikisha_access_token="))).toBe(true);
     expect(cookies.some((c) => c.startsWith("hakikisha_refresh_token="))).toBe(true);

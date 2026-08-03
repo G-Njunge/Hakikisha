@@ -241,7 +241,10 @@ export const openapiSpec = {
       post: {
         tags: ["Auth"],
         summary: "Log in",
-        description: "Sets hakikisha_access_token, hakikisha_refresh_token, and hakikisha_csrf_token cookies.",
+        description:
+          "Sets hakikisha_access_token, hakikisha_refresh_token, and hakikisha_csrf_token cookies. Also returns " +
+          "csrfToken in the body — the client/server are on different origins in production, so the CSRF cookie " +
+          "isn't readable via document.cookie from the client's page; the body is the actual source of truth.",
         requestBody: {
           required: true,
           content: {
@@ -255,7 +258,17 @@ export const openapiSpec = {
           },
         },
         responses: {
-          "200": { description: "Logged in", content: { "application/json": { schema: { type: "object", properties: { user: { $ref: "#/components/schemas/User" } } } } } },
+          "200": {
+            description: "Logged in",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: { user: { $ref: "#/components/schemas/User" }, csrfToken: { type: "string" } },
+                },
+              },
+            },
+          },
           "401": { description: "Invalid email or password" },
         },
       },
@@ -264,8 +277,16 @@ export const openapiSpec = {
       post: {
         tags: ["Auth"],
         summary: "Rotate the refresh token and re-issue all auth cookies",
-        description: "Reads hakikisha_refresh_token from the request cookie — no request body.",
-        responses: { "204": { description: "Cookies rotated" }, "401": { description: "Missing/invalid/expired refresh token" } },
+        description:
+          "Reads hakikisha_refresh_token from the request cookie — no request body. Returns the rotated " +
+          "csrfToken in the body for the same cross-origin reason described on /login.",
+        responses: {
+          "200": {
+            description: "Cookies rotated",
+            content: { "application/json": { schema: { type: "object", properties: { csrfToken: { type: "string" } } } } },
+          },
+          "401": { description: "Missing/invalid/expired refresh token" },
+        },
       },
     },
     "/api/auth/logout": {
@@ -281,8 +302,25 @@ export const openapiSpec = {
       get: {
         tags: ["Auth"],
         summary: "Get the current user",
+        description: "Also returns the current csrfToken in the body, letting the client resync it on page load.",
         security: [{ cookieAuth: [] }],
-        responses: { "200": { description: "Current user", content: { "application/json": { schema: { type: "object", properties: { user: { $ref: "#/components/schemas/User" } } } } } }, "401": { description: "Not authenticated" } },
+        responses: {
+          "200": {
+            description: "Current user",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    user: { $ref: "#/components/schemas/User" },
+                    csrfToken: { type: "string", nullable: true },
+                  },
+                },
+              },
+            },
+          },
+          "401": { description: "Not authenticated" },
+        },
       },
       patch: {
         tags: ["Auth"],

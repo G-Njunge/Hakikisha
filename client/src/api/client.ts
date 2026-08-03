@@ -1,6 +1,6 @@
 import axios from "axios";
 import type { AxiosError, InternalAxiosRequestConfig } from "axios";
-import { getCsrfToken } from "./csrf";
+import { getCsrfToken, setCsrfToken } from "./csrf";
 
 const baseURL = import.meta.env.VITE_API_URL ?? "http://localhost:5000";
 
@@ -35,7 +35,14 @@ apiClient.interceptors.request.use((config) => {
 async function performRefresh(): Promise<void> {
   // Plain axios, not apiClient, so this call bypasses the response
   // interceptor below and can't recursively trigger another refresh.
-  await axios.post(`${baseURL}/api/auth/refresh`, {}, { withCredentials: true });
+  const { data } = await axios.post<{ csrfToken: string }>(
+    `${baseURL}/api/auth/refresh`,
+    {},
+    { withCredentials: true }
+  );
+  // The refresh rotates the CSRF cookie too — resync the in-memory copy (see
+  // csrf.ts) or every mutating request after a refresh would 403.
+  setCsrfToken(data.csrfToken);
 }
 
 // Refresh tokens rotate on every use, so concurrent refreshes must not race
