@@ -484,12 +484,9 @@ export default function BarcodeScanPage() {
       <AuthNav />
 
       <div style={{ position: "relative", zIndex: 1, padding: "40px 24px 90px" }}>
-        <h1 style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 800, fontSize: 30, textAlign: "center", margin: "0 0 6px", color: "#1A1A2E" }}>
+        <h1 style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 800, fontSize: 30, textAlign: "center", margin: "0 0 26px", color: "#1A1A2E" }}>
           Barcode scanner
         </h1>
-        <p style={{ textAlign: "center", fontSize: 14.5, color: "#1A1A2E88", margin: "0 0 26px" }}>
-          Verify barcodes from the local Hakikisha database only.
-        </p>
 
         {step !== "scan" && (
           <div style={{ display: "flex", justifyContent: "center" }}>

@@ -80,22 +80,6 @@ export default function HomePage() {
 
       <section style={{ padding: "28px var(--hk-pad-x) 0", maxWidth: 1280, margin: "0 auto", position: "relative", zIndex: 1 }}>
         <div style={{ textAlign: "left", marginBottom: 26 }}>
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "6px 16px",
-              borderRadius: 999,
-              background: "#103c1c14",
-              fontSize: 12.5,
-              fontWeight: 600,
-              color: "#103c1c",
-              marginBottom: 12,
-            }}
-          >
-            Local database only
-          </div>
           <h2 style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 800, fontSize: 28, margin: "0 0 8px", color: "#1A1A2E" }}>
             Verify a pack
           </h2>

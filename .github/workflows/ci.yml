@@ -28,7 +28,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hakikisha_test
       JWT_SECRET: ci_test_secret_not_real
-      RESEND_API_KEY: re_test_placeholder
+      RESEND_EMAIL_API_KEY: re_test_placeholder
       CLIENT_URL: http://localhost:5173
       NODE_ENV: test
 

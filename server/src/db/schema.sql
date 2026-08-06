@@ -134,9 +134,10 @@ CREATE TABLE pharmacies (
     latitude DOUBLE PRECISION NOT NULL,
     longitude DOUBLE PRECISION NOT NULL,
     phone VARCHAR(50),
-    -- Free-text opening hours (e.g. "Mon-Sat 8am-8pm"). Nullable — not yet
-    -- populated for any seeded pharmacy; the Pharmacy Map UI shows
-    -- "Not listed" until real data is supplied.
+    -- Free-text opening hours in a format lib/pharmacyHours.ts can parse
+    -- (e.g. "Mon-Sat 08:00-20:00", "Daily 07:00-22:00") — seeded for every
+    -- pharmacy in seed.ts, but still nullable since the format is free-text
+    -- and unparseable/missing values are treated as "unknown," not "closed."
     hours VARCHAR(100),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (name, address)

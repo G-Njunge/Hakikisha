@@ -30,6 +30,40 @@
   100% { transform: scale(0); opacity: 0; }
 }
 
+/* BackendWakeGate / ServerWakingUpPage — shown while the Render free-tier API
+   is waking from a cold sleep. Namespaced "hk-wake-*" (not "hk-pulse" etc.)
+   since those names are already taken above by unrelated animations with
+   different keyframe bodies. */
+@keyframes hk-wake-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.06); opacity: 0.85; }
+}
+@keyframes hk-wake-ring {
+  0% { transform: scale(0.9); opacity: 0.6; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+@keyframes hk-wake-dot {
+  0%, 80%, 100% { opacity: 0.25; }
+  40% { opacity: 1; }
+}
+.hk-wake-pulse {
+  animation: hk-wake-pulse 2.4s ease-in-out infinite;
+}
+.hk-wake-ring {
+  animation: hk-wake-ring 2.4s cubic-bezier(.16,.8,.3,1) infinite;
+}
+.hk-wake-dot {
+  animation: hk-wake-dot 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .hk-wake-pulse,
+  .hk-wake-ring,
+  .hk-wake-dot {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
 /* New design system (2026 refresh) — a distinct "hk-" prefixed set kept
    alongside the legacy classes below rather than restyling them in place,
    because SearchPage/MedicineDetailPage deliberately still use the legacy
